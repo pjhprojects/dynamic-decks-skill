@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" width="32px" height="32px" viewBox="0 0 32 32" id="Layer_1">
+  <title>growth</title><style>.a{fill:#ff0000}</style>
+  <script>alert(1)</script>
+  <rect x="4" y="18" width="5" height="10" fill="#0A66C2"/>
+  <rect x="13" y="12" width="5" height="16" style="fill:#0A66C2"/>
+  <rect x="22" y="5" width="5" height="23" fill="#0A66C2" onclick="evil()"/>
+</svg>

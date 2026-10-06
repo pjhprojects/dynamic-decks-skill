@@ -1,0 +1,38 @@
+name: Release
+
+# Pushing a tag such as v1.0.0 runs the tests, packages the skill and
+# attaches it to a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Check that the tag matches the version in the code
+        run: |
+          version=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' dynamic-decks/scripts/_deck.py)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match VERSION $version in dynamic-decks/scripts/_deck.py"
+            exit 1
+          fi
+      - name: Install test dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+      - name: Run the tests
+        run: python tests/run_all.py
+      - name: Package the skill
+        run: python tools/package.py
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/dynamic-decks.skill dist/dynamic-decks.zip --title "DynamicDecks $GITHUB_REF_NAME" --generate-notes --verify-tag

@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DynamicDecks starter</title>
+<meta name="deck:footer" content="DynamicDecks starter">
+<!-- Optional: <meta name="deck:theme" content="default">  <meta name="deck:variant" content="dark">  <meta name="deck:icons" content="lucide"> -->
+
+<!-- Deck-wide effects go here. One rule reaches every slide. This one makes every image rise into place. -->
+<style data-deck>
+  .slide.is-entered img { animation: deck-rise var(--dur-slow) var(--ease-out) backwards; }
+</style>
+</head>
+<body>
+<main class="deck">
+
+<!-- ======================================================================
+     TITLE
+     ====================================================================== -->
+<section class="slide" data-layout="title">
+  <p class="slide-eyebrow">DynamicDecks starter</p>
+  <h1 class="slide-title">Decks that open anywhere</h1>
+  <p class="slide-subtitle">One example of every layout your agent can build a deck from.</p>
+  <ul class="slide-meta">
+    <li>Layout reference</li>
+    <li>Press ? for the shortcuts</li>
+    <li>Press S for the presenter window</li>
+  </ul>
+  <aside class="notes">
+    <p>This deck is the starting point for every new presentation. Each slide shows one layout with realistic content.</p>
+    <p>For slides that go beyond the layouts (typing, moving parts, charts that play, live controls), see the showcase deck.</p>
+    <p>Arrow keys or a clicker move through it. Press S to open this notes view in its own window.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     BULLETS, with step reveals
+     ====================================================================== -->
+<section class="slide" data-layout="bullets">
+  <p class="slide-eyebrow">How it works</p>
+  <h2 class="slide-title">One file holds the whole presentation</h2>
+  <div class="slide-body">
+    <ul>
+      <li data-step>The slides, fonts, icons and images are all inside this one HTML file.</li>
+      <li data-step>It opens in any desktop browser with a double-click, with no install and no connection.</li>
+      <li data-step>The presenter view, speaker notes and PDF export come with it.</li>
+    </ul>
+  </div>
+  <aside class="notes">
+    <p>Each bullet appears on its own click. That is a step reveal: add data-step to any element.</p>
+    <p>Going backwards shows a slide in its finished state, as PowerPoint does.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     SECTION
+     ====================================================================== -->
+<section class="slide" data-layout="section">
+  <p class="section-number">1</p>
+  <h2 class="slide-title">The ready-made layouts</h2>
+  <p class="slide-subtitle">Ordinary slides pick a layout and supply the words.</p>
+  <aside class="notes">
+    <p>Section slides break the deck into parts. The number is optional; use it only when the sections are a real sequence.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     TWO-COLUMN
+     ====================================================================== -->
+<section class="slide" data-layout="two-column">
+  <h2 class="slide-title">The theme fixes the ingredients, not the composition</h2>
+  <div class="slide-body">
+    <div class="col">
+      <h3>Fixed by the theme</h3>
+      <ul>
+        <li>Colors and the chart palette</li>
+        <li>Typefaces, sizes and spacing</li>
+        <li>The frame: title, margins, footer</li>
+        <li>Motion speeds and easing</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3>Open on every slide</h3>
+      <ul>
+        <li>Any layout, or none</li>
+        <li>Custom HTML, SVG and script</li>
+        <li>Any animation built from the motion values</li>
+        <li>Full-bleed slides that drop the frame</li>
+      </ul>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>This is the rule that keeps a deck consistent while leaving room for unusual slides: everything draws from the theme's named values.</p>
+    <p>Use data-split="2-1" or "1-2" on the slide for unequal columns.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     BIG NUMBER
+     ====================================================================== -->
+<section class="slide" data-layout="big-number">
+  <p class="slide-eyebrow">Layouts</p>
+  <div class="slide-body">
+    <p class="big-number" data-count>15</p>
+    <p class="big-number-label">ready-made layouts, and a blank canvas when none of them fits.</p>
+    <p class="big-number-context">Title, section, bullets, two-column, big number, stats, cards, chart, image, quote, diagram, table, timeline, closing and full-bleed.</p>
+  </div>
+  <aside class="notes">
+    <p>Use the big-number layout when one figure is the point of the slide. The number counts up when the slide appears.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     STATS
+     ====================================================================== -->
+<section class="slide" data-layout="stats">
+  <h2 class="slide-title">What ships in the box</h2>
+  <div class="slide-body">
+    <div class="stat">
+      <span class="stat-value" data-count>2,122</span>
+      <span class="stat-label">icons in the default set, searchable by meaning</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value" data-count>8</span>
+      <span class="stat-label">chart colors, checked for color-blind readers</span>
+    </div>
+    <div class="stat">
+      <span class="stat-value">0</span>
+      <span class="stat-label">network requests when the deck is opened</span>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Stats show two to four figures side by side. Keep each label to a short phrase.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     CARDS
+     ====================================================================== -->
+<section class="slide" data-layout="cards">
+  <h2 class="slide-title">Presenting works the way you expect</h2>
+  <div class="slide-body" data-stagger>
+    <article class="card" data-anim="rise">
+      <svg class="icon icon--lg" aria-hidden="true"><use href="#icon-presentation"/></svg>
+      <h3>Presenter window</h3>
+      <p>Press S for a second window with the current slide, the next one, your notes and a timer.</p>
+    </article>
+    <article class="card" data-anim="rise">
+      <svg class="icon icon--lg" aria-hidden="true"><use href="#icon-mouse-pointer-click"/></svg>
+      <h3>Clickers and keys</h3>
+      <p>Arrow keys, space, Page Up and Page Down all work, in either window.</p>
+    </article>
+    <article class="card" data-anim="rise">
+      <svg class="icon icon--lg" aria-hidden="true"><use href="#icon-printer"/></svg>
+      <h3>PDF export</h3>
+      <p>Press P to save the slides as a PDF, or Shift and P for slides with notes.</p>
+    </article>
+  </div>
+  <aside class="notes">
+    <p>Cards suit three or four parallel points. Icons come from the icon library by name.</p>
+    <p>The cards rise in one after another: data-stagger on the parent, data-anim on each card.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     CHART: bar
+     ====================================================================== -->
+<section class="slide" data-layout="chart">
+  <p class="slide-eyebrow">Charts</p>
+  <h2 class="slide-title">Charts are drawn as SVG, so they follow the theme</h2>
+  <div class="slide-body">
+    <figure class="chart-figure" data-kind="bar">
+      <svg class="chart" viewBox="0 0 1680 560" role="img" aria-label="Sessions by quarter, sample data">
+        <line class="chart-axis" x1="0.0" x2="1672.0" y1="500.0" y2="500.0"/>
+        <path class="chart-bar series-1 is-muted" d="M161.0,500.0 V376.9 Q161.0,368.9 169.0,368.9 H249.0 Q257.0,368.9 257.0,376.9 V500.0 Z" data-anim="grow-up" style="--i:0"><title>Q1: 120</title></path>
+        <text class="chart-value" x="209.0" y="354.9" text-anchor="middle" data-anim="fade" style="--i:2">120</text>
+        <text class="chart-category" x="209.0" y="542.0" text-anchor="middle">Q1</text>
+        <path class="chart-bar series-1 is-muted" d="M579.0,500.0 V311.3 Q579.0,303.3 587.0,303.3 H667.0 Q675.0,303.3 675.0,311.3 V500.0 Z" data-anim="grow-up" style="--i:1"><title>Q2: 180</title></path>
+        <text class="chart-value" x="627.0" y="289.3" text-anchor="middle" data-anim="fade" style="--i:3">180</text>
+        <text class="chart-category" x="627.0" y="542.0" text-anchor="middle">Q2</text>
+        <path class="chart-bar series-1 is-muted" d="M997.0,500.0 V223.9 Q997.0,215.9 1005.0,215.9 H1085.0 Q1093.0,215.9 1093.0,223.9 V500.0 Z" data-anim="grow-up" style="--i:2"><title>Q3: 260</title></path>
+        <text class="chart-value" x="1045.0" y="201.9" text-anchor="middle" data-anim="fade" style="--i:4">260</text>
+        <text class="chart-category" x="1045.0" y="542.0" text-anchor="middle">Q3</text>
+        <path class="chart-bar series-1" d="M1415.0,500.0 V60.0 Q1415.0,52.0 1423.0,52.0 H1503.0 Q1511.0,52.0 1511.0,60.0 V500.0 Z" data-anim="grow-up" style="--i:3"><title>Q4: 410</title></path>
+        <text class="chart-value" x="1463.0" y="38.0" text-anchor="middle" data-anim="fade" style="--i:5">410</text>
+        <text class="chart-category" x="1463.0" y="542.0" text-anchor="middle">Q4</text>
+      </svg>
+      <figcaption>Sample data, for illustration only.</figcaption>
+    </figure>
+  </div>
+  <aside class="notes">
+    <p>The title states the takeaway. The chart highlights the bar that supports it and mutes the rest.</p>
+    <p>This chart came from scripts/chart.py, which computes the geometry. Its colors come from the theme's chart palette.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     CHART: line with a side note
+     ====================================================================== -->
+<section class="slide" data-layout="chart" data-split="3-1">
+  <h2 class="slide-title">Line charts label their own ends</h2>
+  <div class="slide-body">
+    <figure class="chart-figure" data-kind="line">
+      <ul class="legend">
+        <li class="legend-item series-1"><span class="legend-swatch" data-shape="line"></span>With the template</li>
+        <li class="legend-item series-2"><span class="legend-swatch" data-shape="line"></span>Without</li>
+      </ul>
+      <svg class="chart" viewBox="0 0 1200 540" role="img" aria-label="Two sample series over eight months">
+        <line class="chart-axis" x1="60.3" x2="800.4" y1="480.0" y2="480.0"/>
+        <text x="46.3" y="488.2" text-anchor="end">0%</text>
+        <line class="chart-grid" x1="60.3" x2="800.4" y1="364.5" y2="364.5"/>
+        <text x="46.3" y="372.7" text-anchor="end">20%</text>
+        <line class="chart-grid" x1="60.3" x2="800.4" y1="249.0" y2="249.0"/>
+        <text x="46.3" y="257.2" text-anchor="end">40%</text>
+        <line class="chart-grid" x1="60.3" x2="800.4" y1="133.5" y2="133.5"/>
+        <text x="46.3" y="141.7" text-anchor="end">60%</text>
+        <line class="chart-grid" x1="60.3" x2="800.4" y1="18.0" y2="18.0"/>
+        <text x="46.3" y="26.2" text-anchor="end">80%</text>
+        <text class="chart-category" x="60.3" y="522.0" text-anchor="middle">Jan</text>
+        <text class="chart-category" x="166.0" y="522.0" text-anchor="middle">Feb</text>
+        <text class="chart-category" x="271.8" y="522.0" text-anchor="middle">Mar</text>
+        <text class="chart-category" x="377.5" y="522.0" text-anchor="middle">Apr</text>
+        <text class="chart-category" x="483.2" y="522.0" text-anchor="middle">May</text>
+        <text class="chart-category" x="588.9" y="522.0" text-anchor="middle">Jun</text>
+        <text class="chart-category" x="694.7" y="522.0" text-anchor="middle">Jul</text>
+        <text class="chart-category" x="800.4" y="522.0" text-anchor="middle">Aug</text>
+        <path class="chart-line series-1" d="M60.3,352.9 L166.0,335.6 L271.8,301.0 L377.5,306.8 L483.2,260.6 L588.9,225.9 L694.7,179.7 L800.4,127.7" data-anim="draw" style="--i:0"><title>With the template</title></path>
+        <circle class="chart-dot series-1" cx="800.4" cy="127.7" r="9" data-anim="pop" style="--i:8"><title>With the template, Aug: 61%</title></circle>
+        <path class="chart-line series-2" d="M60.3,364.5 L166.0,358.7 L271.8,352.9 L377.5,341.4 L483.2,347.2 L588.9,329.9 L694.7,324.1 L800.4,312.5" data-anim="draw" style="--i:1"><title>Without</title></path>
+        <circle class="chart-dot series-2" cx="800.4" cy="312.5" r="9" data-anim="pop" style="--i:9"><title>Without, Aug: 29%</title></circle>
+        <text class="chart-series-label" x="822.4" y="137.9" data-anim="fade" style="--i:9">With the template  61%</text>
+        <text class="chart-series-label" x="822.4" y="322.7" data-anim="fade" style="--i:10">Without  29%</text>
+      </svg>
+      <figcaption>Sample data, for illustration only.</figcaption>
+    </figure>
+    <div class="chart-notes">
+      <p class="lede">Label the lines directly, and say what the reader should see.</p>
+      <p class="text-muted">A legend is still there for two or more series, so color never carries the meaning alone.</p>
+    </div>
+  </div>
+  <aside class="notes">
+    <p>Use data-split="3-1" or "2-1" to put a short reading of the chart beside it.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     IMAGE
+     ====================================================================== -->
+<section class="slide" data-layout="image">
+  <p class="slide-eyebrow">Images</p>
+  <h2 class="slide-title">Pictures are embedded, so they travel with the file</h2>
+  <div class="slide-body">
+    <p>Reference a local image and the build compresses it and places it inside the deck.</p>
+    <p class="text-muted">Set data-image-side="left" to put the picture on the other side.</p>
+  </div>
+  <figure class="slide-image">
+    <img src="assets/sample-image.svg" alt="Abstract composition of overlapping circles">
+    <figcaption>Sample artwork</figcaption>
+  </figure>
+  <aside class="notes">
+    <p>The image layout gives half the slide to a picture that runs to the edge.</p>
+    <p>This image rises into place because of one deck-wide rule in the head of the file.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     QUOTE
+     ====================================================================== -->
+<section class="slide" data-layout="quote">
+  <div class="slide-body">
+    <blockquote class="quote">Constrain the ingredients, not the composition.</blockquote>
+    <p class="quote-by">The design rule behind this deck
+      <span class="quote-role">Every slide may look different. All of them use the same values.</span>
+    </p>
+  </div>
+  <aside class="notes">
+    <p>Use the quote layout for one sentence worth pausing on. Put the speaker's name and role underneath.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     DIAGRAM: inline SVG
+     ====================================================================== -->
+<section class="slide" data-layout="diagram" id="layers">
+  <h2 class="slide-title">Five layers go into every deck, and only one changes</h2>
+  <div class="slide-body">
+    <svg class="diagram" viewBox="0 0 1680 560" role="img" aria-label="Engine, theme, icons and layouts stay fixed; content changes per deck; all five are combined into one HTML file">
+      <defs>
+        <marker id="layers-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="arrowhead" d="M0,0 L10,5 L0,10 Z"/>
+        </marker>
+      </defs>
+      <g data-stagger>
+        <g data-anim="from-left">
+          <rect class="node" x="0" y="0" width="780" height="96" rx="14"/>
+          <text class="label label--title" x="32" y="42">Engine</text>
+          <text class="label label--muted" x="32" y="80">Navigation, notes, presenter view, print</text>
+        </g>
+        <g data-anim="from-left">
+          <rect class="node" x="0" y="116" width="780" height="96" rx="14"/>
+          <text class="label label--title" x="32" y="158">Theme</text>
+          <text class="label label--muted" x="32" y="196">Colors, type, spacing, motion, logo</text>
+        </g>
+        <g data-anim="from-left">
+          <rect class="node" x="0" y="232" width="780" height="96" rx="14"/>
+          <text class="label label--title" x="32" y="274">Icons</text>
+          <text class="label label--muted" x="32" y="312">Only the icons the deck uses</text>
+        </g>
+        <g data-anim="from-left">
+          <rect class="node" x="0" y="348" width="780" height="96" rx="14"/>
+          <text class="label label--title" x="32" y="390">Layouts</text>
+          <text class="label label--muted" x="32" y="428">Ready-made slide types</text>
+        </g>
+        <g data-anim="from-left">
+          <rect class="node node--soft" x="0" y="464" width="780" height="96" rx="14"/>
+          <text class="label label--title" x="32" y="506">Content</text>
+          <text class="label label--muted" x="32" y="544">The slides: the only layer that changes</text>
+        </g>
+      </g>
+      <path class="edge" d="M800,48 H850 V512 H800" data-anim="draw"/>
+      <path class="edge" d="M850,280 H1040" marker-end="url(#layers-arrow)" data-anim="draw"/>
+      <g data-anim="pop" style="--i:6">
+        <rect class="node node--accent" x="1060" y="160" width="620" height="240" rx="24"/>
+        <text class="label label--title label--large label--on-accent" x="1108" y="268">deck.html</text>
+        <text class="label label--on-accent" x="1108" y="330">Opens in any browser, offline</text>
+      </g>
+    </svg>
+  </div>
+  <aside class="notes">
+    <p>Diagrams are inline SVG drawn with the diagram classes, so boxes, lines and labels take their look from the theme.</p>
+    <p>The boxes slide in, then the connecting lines draw themselves.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     DIAGRAM: process row, no coordinates needed
+     ====================================================================== -->
+<section class="slide" data-layout="diagram">
+  <h2 class="slide-title">From a prompt to a deck in five moves</h2>
+  <div class="slide-body">
+    <ol class="flow">
+      <li class="flow-step">
+        <svg class="icon" aria-hidden="true"><use href="#icon-list-tree"/></svg>
+        <h3>Outline</h3>
+        Gather the content and decide what each slide says.
+      </li>
+      <li class="flow-step">
+        <svg class="icon" aria-hidden="true"><use href="#icon-pen-line"/></svg>
+        <h3>Write</h3>
+        Fill in slides from this starter, with notes for each.
+      </li>
+      <li class="flow-step">
+        <svg class="icon" aria-hidden="true"><use href="#icon-package"/></svg>
+        <h3>Build</h3>
+        Combine engine, theme, icons and slides into one file.
+      </li>
+      <li class="flow-step">
+        <svg class="icon" aria-hidden="true"><use href="#icon-list-checks"/></svg>
+        <h3>Check</h3>
+        Run the delivery checks and look at every slide.
+      </li>
+      <li class="flow-step is-accent">
+        <svg class="icon" aria-hidden="true"><use href="#icon-play"/></svg>
+        <h3>Present</h3>
+        Open the file and press F.
+      </li>
+    </ol>
+  </div>
+  <aside class="notes">
+    <p>For a simple process, the flow component draws the boxes and arrows without any coordinates.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     TABLE
+     ====================================================================== -->
+<section class="slide" data-layout="table">
+  <h2 class="slide-title">An HTML deck or a PowerPoint file?</h2>
+  <div class="slide-body">
+    <table class="table">
+      <thead>
+        <tr><th></th><th class="is-highlight">HTML deck</th><th>PowerPoint file</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th>Opens with</th>
+          <td class="is-highlight">Any desktop browser</td>
+          <td>PowerPoint or Keynote</td>
+        </tr>
+        <tr>
+          <th>Custom animation and diagrams</th>
+          <td class="is-highlight">Anything the web can draw</td>
+          <td>The built-in effects</td>
+        </tr>
+        <tr>
+          <th>Restyle a finished deck</th>
+          <td class="is-highlight">Swap the theme and rebuild</td>
+          <td>Reapply a template, then fix by hand</td>
+        </tr>
+        <tr>
+          <th>Edit by clicking into a slide</th>
+          <td class="is-highlight"><svg class="icon icon--sm icon--negative" aria-hidden="true"><use href="#icon-x"/></svg> No, ask your agent</td>
+          <td><svg class="icon icon--sm icon--positive" aria-hidden="true"><use href="#icon-check"/></svg> Yes</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <aside class="notes">
+    <p>Tables compare options row by row. Mark one column with is-highlight to show the recommendation.</p>
+    <p>Be honest about the trade: recipients cannot click into an HTML deck to fix a typo.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     TIMELINE
+     ====================================================================== -->
+<section class="slide" data-layout="timeline">
+  <h2 class="slide-title">A sensible way to roll this out</h2>
+  <div class="slide-body">
+    <ol class="timeline">
+      <li class="timeline-item is-done">
+        <span class="timeline-date">Today</span>
+        <span class="timeline-title">Try the starter</span>
+        <span class="timeline-text">Open this file, present it, export a PDF.</span>
+      </li>
+      <li class="timeline-item is-current">
+        <span class="timeline-date">This week</span>
+        <span class="timeline-title">Add your theme</span>
+        <span class="timeline-text">Turn a PowerPoint template or brand guide into a theme.</span>
+      </li>
+      <li class="timeline-item">
+        <span class="timeline-date">Next</span>
+        <span class="timeline-title">Build a real deck</span>
+        <span class="timeline-text">Use it for one presentation you actually have to give.</span>
+      </li>
+      <li class="timeline-item">
+        <span class="timeline-date">Later</span>
+        <span class="timeline-title">Share the skill</span>
+        <span class="timeline-text">Let colleagues build decks in the same style.</span>
+      </li>
+    </ol>
+  </div>
+  <aside class="notes">
+    <p>Timelines show dated steps. Mark finished items with is-done and the current one with is-current.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     SECTION
+     ====================================================================== -->
+<section class="slide" data-layout="section">
+  <p class="section-number">2</p>
+  <h2 class="slide-title">Going off the template</h2>
+  <p class="slide-subtitle">When no layout fits, a slide can hold anything.</p>
+  <aside class="notes">
+    <p>The next three slides show the motion helpers, a custom slide inside the frame, and a full-bleed slide.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     MOTION HELPERS
+     ====================================================================== -->
+<section class="slide">
+  <p class="slide-eyebrow">Motion</p>
+  <h2 class="slide-title">Ready-made motion, one attribute each</h2>
+  <div class="slide-body">
+    <div class="grid-3" data-stagger>
+      <div class="panel row" data-anim="fade"><svg class="icon icon--accent" aria-hidden="true"><use href="#icon-eye"/></svg><span><strong>fade</strong><br><span class="text-muted text-sm">The quiet default</span></span></div>
+      <div class="panel row" data-anim="rise"><svg class="icon icon--accent" aria-hidden="true"><use href="#icon-arrow-up"/></svg><span><strong>rise</strong><br><span class="text-muted text-sm">Fades in from below</span></span></div>
+      <div class="panel row" data-anim="from-left"><svg class="icon icon--accent" aria-hidden="true"><use href="#icon-arrow-right"/></svg><span><strong>from-left</strong><br><span class="text-muted text-sm">Slides in from the side</span></span></div>
+      <div class="panel row" data-anim="pop"><svg class="icon icon--accent" aria-hidden="true"><use href="#icon-sparkles"/></svg><span><strong>pop</strong><br><span class="text-muted text-sm">Springs up from small</span></span></div>
+      <div class="panel row" data-anim="bounce"><svg class="icon icon--accent" aria-hidden="true"><use href="#icon-circle-arrow-down"/></svg><span><strong>bounce</strong><br><span class="text-muted text-sm">Drops in and settles</span></span></div>
+      <div class="panel row" data-anim="wipe"><svg class="icon icon--accent" aria-hidden="true"><use href="#icon-panel-left-open"/></svg><span><strong>wipe</strong><br><span class="text-muted text-sm">Reveals left to right</span></span></div>
+    </div>
+    <p class="text-muted push-down">Also available: drop, from-right, zoom, grow-up and grow-right for bars, draw for SVG lines, travel along a path, data-count for numbers and data-type for typed text.</p>
+  </div>
+  <aside class="notes">
+    <p>Add data-anim to an element and it animates when the slide appears. Put data-stagger on the parent to cascade.</p>
+    <p>Use motion to direct attention, not on every slide. Ordinary content slides are better still.</p>
+  </aside>
+</section>
+
+<!-- ======================================================================
+     CUSTOM SLIDE inside the frame: scoped CSS and script
+     ====================================================================== -->
+<section class="slide" id="custom-wave">
+  <p class="slide-eyebrow">Custom slide</p>
+  <h2 class="slide-title">Anything can go on a slide, as long as it is built from the theme</h2>
+  <div class="slide-body">
+    <svg class="wave" viewBox="0 0 1680 440" role="img" aria-label="A row of rounded bars forming a moving wave"></svg>
+    <p class="text-muted">This wave is drawn by a script that belongs to this slide only. It starts when the slide appears, stops when you leave, and prints as a still frame.</p>
+  </div>
+  <aside class="notes">
+    <p>Custom slides carry their own style and script. Both are scoped to the slide, so they cannot disturb the rest of the deck.</p>
+    <p>Colors come from the theme, so this slide changes with a theme swap like any other.</p>
+  </aside>
+  <style data-slide-scope>
+    .wave { flex: 1 1 auto; min-height: 0; width: 100%; }
+    .wave rect { fill: var(--color-accent); }
+    .wave rect:nth-child(4n + 1) { fill: var(--color-accent-2); }
+  </style>
+  <script data-slide-scope>
+    const svg = slide.querySelector('.wave');
+    const COUNT = 56, W = 1680, H = 440, BAR = 16;
+    const bars = [];
+    for (let i = 0; i < COUNT; i++) {
+      const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      r.setAttribute('x', (i * W / COUNT + (W / COUNT - BAR) / 2).toFixed(1));
+      r.setAttribute('width', BAR);
+      r.setAttribute('rx', BAR / 2);
+      svg.appendChild(r);
+      bars.push(r);
+    }
+    // phase 0 is the finished frame: what print, previews and the overview show
+    function draw(phase) {
+      bars.forEach((r, i) => {
+        const h = 70 + 150 * (1 + Math.sin(i * 0.32 + phase)) + 30 * Math.sin(i * 0.11 - phase * 0.5);
+        r.setAttribute('height', h.toFixed(1));
+        r.setAttribute('y', ((H - h) / 2).toFixed(1));
+      });
+    }
+    draw(0);
+    slide.addEventListener('deck:enter', () => {
+      const beat = deck.ms('--dur-slow');
+      deck.loop(slide, (elapsed) => draw(elapsed / beat));
+    });
+    slide.addEventListener('deck:rest', () => draw(0));
+  </script>
+</section>
+
+<!-- ======================================================================
+     FULL-BLEED: no frame, CSS-only animation
+     ====================================================================== -->
+<section class="slide" data-layout="full-bleed" data-tone="inverse" id="full-bleed-demo">
+  <div class="bleed-copy">
+    <h2>Full-bleed slides drop the frame</h2>
+    <p>No title position, no margins, no footer. The whole stage is yours.</p>
+  </div>
+  <div class="rings" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+  <aside class="notes">
+    <p>Use full-bleed for a visual that should take over the screen. The stage is 1920 by 1080.</p>
+    <p>The rings animate from a start state to the finished slide, so the still version is complete.</p>
+  </aside>
+  <style data-slide-scope>
+    & { display: grid; grid-template-columns: 1fr 1fr; align-items: center; padding-left: var(--frame-x); }
+    .bleed-copy h2 {
+      font-family: var(--font-display);
+      font-size: var(--text-2xl);
+      font-weight: var(--weight-bold);
+      line-height: 1;
+      letter-spacing: var(--tracking-tight);
+    }
+    .bleed-copy p { margin-top: var(--space-5); max-width: 24ch; font-size: var(--text-lg); line-height: var(--leading-snug); color: var(--color-text-muted); }
+    .rings { display: grid; place-items: center; height: 100%; }
+    .rings span {
+      grid-area: 1 / 1;
+      width: calc(var(--space-8) * var(--k));
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: var(--stroke-thin) solid var(--color-border);
+    }
+    .rings span:nth-child(1) { --k: 1.6; border: 0; background: var(--color-accent); }
+    .rings span:nth-child(2) { --k: 3.4; }
+    .rings span:nth-child(3) { --k: 5.4; }
+    .rings span:nth-child(4) { --k: 7.6; }
+    .rings span:nth-child(5) { --k: 10; }
+    &.is-entered .rings span {
+      animation: fullbleed-ring var(--dur-slow) var(--ease-out) backwards;
+      animation-delay: calc(var(--k) * var(--stagger));
+    }
+    @keyframes fullbleed-ring { from { transform: scale(0.3); opacity: 0; } }
+    &.is-entered .bleed-copy { animation: deck-from-left var(--dur-slow) var(--ease-out) backwards; }
+  </style>
+</section>
+
+<!-- ======================================================================
+     CLOSING
+     ====================================================================== -->
+<section class="slide" data-layout="closing">
+  <h2 class="slide-title">Make it yours</h2>
+  <p class="slide-subtitle">Four things to try next.</p>
+  <div class="slide-body">
+    <ul class="next-steps" data-stagger>
+      <li data-anim="from-left"><svg class="icon" aria-hidden="true"><use href="#icon-palette"/></svg> Press T to switch between the light and dark variants.</li>
+      <li data-anim="from-left"><svg class="icon" aria-hidden="true"><use href="#icon-layout-grid"/></svg> Press O for an overview of every slide.</li>
+      <li data-anim="from-left"><svg class="icon" aria-hidden="true"><use href="#icon-file-down"/></svg> Press P to save the deck as a PDF.</li>
+      <li data-anim="from-left"><svg class="icon" aria-hidden="true"><use href="#icon-mouse-pointer-click"/></svg> Press E and click anything to copy a reference to it for your agent.</li>
+    </ul>
+  </div>
+  <aside class="notes">
+    <p>Closing slides end on one statement and the next steps you want from the audience.</p>
+    <p>Edit mode is for asking for changes: press E, click an element, and paste the reference into your message.</p>
+  </aside>
+</section>
+
+</main>
+</body>
+</html>

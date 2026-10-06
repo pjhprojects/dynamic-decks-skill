@@ -1,0 +1,13 @@
+{
+  "name": "default",
+  "label": "Signal",
+  "description": "Built-in theme. Cool paper background, navy ink, signal-blue accent, saturated blue title and section slides.",
+  "variants": ["light", "dark"],
+  "default_variant": "light",
+  "icons": "lucide",
+  "fonts": {
+    "license": "SIL Open Font License 1.1 (see fonts/OFL.txt). Free to embed and share.",
+    "families": ["Bricolage Grotesque", "Hanken Grotesk", "JetBrains Mono"]
+  },
+  "logo": null
+}

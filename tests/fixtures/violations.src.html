@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Violations</title>
+<style data-deck>.slide h2 { color: #ff0000; font-family: Arial; }</style>
+</head><body>
+<main class="deck">
+<section class="slide">
+  <h2 class="slide-title" style="color: red">Raw color inline</h2>
+  <div class="slide-body">
+    <p style="background: rgb(1,2,3); font-family: 'Comic Sans MS'">x</p>
+    <svg viewBox="0 0 24 24" width="48"><path d="M1 1h22v22H1z" fill="#00ff00"/></svg>
+    <svg class="icon"><use href="#icon-not-a-real-icon"/></svg>
+    <img src="https://example.com/a.png">
+    <p style="color: var(--color-accent); transition: opacity 300ms">ok color, raw duration</p>
+    <svg class="chart" viewBox="0 0 100 100"><rect fill="white" width="10" height="10"/><rect class="chart-bar series-1" width="10" height="10"/></svg>
+    <div data-raw="customer logo colors"><span style="color:#123456">exempt</span></div>
+  </div>
+  <style>.x { opacity: 1 }</style>
+  <style data-slide-scope>
+    .is-entered .bar { animation: grow 2s ease forwards; }
+    .hidden-thing { opacity: 0; }
+    @import url("https://fonts.googleapis.com/css?family=Roboto");
+    @keyframes grow { from { height: 0 } }
+  </style>
+  <script data-slide-scope>
+    const c = document.querySelector('canvas'); let ctx = {}; ctx.fillStyle = '#abcdef';
+    requestAnimationFrame(function f(){ requestAnimationFrame(f); });
+    fetch('https://example.com/data.json');
+  </script>
+  <script>console.log('unscoped')</script>
+</section>
+<section class="slide" data-layout="nonsense"><h2 class="slide-title">No notes, bad layout</h2>
+  <div class="slide-body"><ul><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li></ul></div></section>
+</main></body></html>

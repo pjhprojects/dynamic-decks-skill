@@ -1,0 +1,4 @@
+playwright>=1.40
+pillow>=10
+fonttools>=4.40
+pypdf>=4

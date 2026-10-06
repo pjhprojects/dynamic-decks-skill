@@ -1,0 +1,11 @@
+{
+  "_about": "Defaults for new decks. Your own settings live in ~/.dynamic-decks/settings.json (or $DYNAMIC_DECKS_HOME) and win over these.",
+  "theme": "default",
+  "variant": "",
+  "icons": "",
+  "icon_fallback": "none",
+  "notes": "required",
+  "compress_images": true,
+  "max_image_px": 2400,
+  "image_quality": 82
+}

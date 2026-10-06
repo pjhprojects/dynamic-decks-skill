@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1080" role="img" aria-label="Abstract composition of overlapping circles">
+  <rect width="960" height="1080" fill="#1F2BD6"/>
+  <circle cx="720" cy="250" r="420" fill="#2B3BF0"/>
+  <circle cx="720" cy="250" r="270" fill="#4353F7"/>
+  <circle cx="720" cy="250" r="120" fill="#FFC2B3"/>
+  <circle cx="210" cy="860" r="330" fill="#F0522E"/>
+  <circle cx="210" cy="860" r="190" fill="#FF8A6B"/>
+  <g fill="none" stroke="#CDD2FF" stroke-width="3">
+    <circle cx="480" cy="560" r="150"/>
+    <circle cx="480" cy="560" r="250"/>
+    <circle cx="480" cy="560" r="350"/>
+  </g>
+  <circle cx="480" cy="560" r="26" fill="#FFFFFF"/>
+</svg>

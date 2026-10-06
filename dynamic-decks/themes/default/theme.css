@@ -1,0 +1,272 @@
+/* ==========================================================================
+   THEME: default ("Signal")
+   Every design decision a deck makes is a named value in this file.
+   Swap this file and every slide, chart, diagram and icon follows.
+
+   Structure of a theme file:
+     1. Fonts    @font-face rules. The build embeds only the faces a deck needs.
+     2. Tokens   the base (light) values on :root
+     3. Variants overrides per variant, e.g. :root[data-variant="dark"]
+     4. Decor    optional extra CSS for the frame (rules, marks, logo placement)
+
+   Sizes are in px on a 1920 x 1080 stage. 2px here is 1pt on a 13.33in slide.
+   ========================================================================== */
+
+/* ---- 1. Fonts ----------------------------------------------------------- */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: block;
+  src: url("fonts/bricolage-grotesque-latin-opsz-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: block;
+  src: url("fonts/bricolage-grotesque-latin-ext-opsz-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("fonts/hanken-grotesk-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("fonts/hanken-grotesk-latin-ext-wght-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("fonts/hanken-grotesk-latin-wght-italic.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("fonts/hanken-grotesk-latin-ext-wght-italic.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: block;
+  src: url("fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: block;
+  src: url("fonts/jetbrains-mono-latin-ext-wght-normal.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---- 2. Tokens: base (light) -------------------------------------------- */
+:root {
+  /* Color: surfaces and ink */
+  --color-bg: #F7F8FC;
+  --color-surface: #ECEEF7;
+  --color-surface-2: #E0E4F2;
+  --color-text: #10184A;
+  --color-text-muted: #4B5381;
+  --color-text-subtle: #666E99;
+  --color-border: #D3D8EA;
+
+  /* Color: accents */
+  --color-accent: #2B3BF0;
+  --color-accent-contrast: #FFFFFF;
+  --color-accent-soft: #DFE3FF;
+  --color-accent-2: #F0522E;
+  --color-accent-2-soft: #FFE3DB;
+
+  /* Color: meaning */
+  --color-positive: #0B7D43;
+  --color-negative: #C62F2F;
+  --color-warning: #9A6500;
+
+  /* Color: inverse slides (title, section, closing) */
+  --color-inverse-bg: #1F2BD6;
+  --color-inverse-text: #FFFFFF;
+  --color-inverse-muted: #CDD2FF;
+  --color-inverse-accent: #FFC2B3;
+  --color-inverse-border: #5560E8;
+  --color-inverse-surface: #3340E6;
+
+  --color-letterbox: #05071A;
+
+  /* Chart palette: categorical order is fixed, never cycled */
+  --chart-1: #2B3BF0;
+  --chart-2: #EB6834;
+  --chart-3: #1BAF7A;
+  --chart-4: #EDA100;
+  --chart-5: #E87BA4;
+  --chart-6: #008300;
+  --chart-7: #4A3AA7;
+  --chart-8: #E34948;
+  --chart-neutral: #B9C0DC;
+  --chart-grid: #DCE0EF;
+  --chart-axis: #A9B1D1;
+  --chart-label: #4B5381;
+
+  /* Type: families */
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Hanken Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Type: weights */
+  --weight-regular: 400;
+  --weight-medium: 550;
+  --weight-bold: 700;
+  --weight-display: 650;
+
+  /* Type: scale */
+  --text-xs: 24px;
+  --text-sm: 30px;
+  --text-base: 36px;
+  --text-md: 44px;
+  --text-lg: 54px;
+  --text-xl: 68px;
+  --text-2xl: 88px;
+  --text-3xl: 120px;
+  --text-display: 164px;
+  --text-mega: 320px;
+
+  /* Type: rhythm */
+  --leading-tight: 1.04;
+  --leading-snug: 1.22;
+  --leading-normal: 1.42;
+  --tracking-display: -0.015em;
+  --tracking-tight: -0.022em;
+  --tracking-normal: 0em;
+
+  /* Spacing scale */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 48px;
+  --space-6: 64px;
+  --space-7: 96px;
+  --space-8: 128px;
+
+  /* Frame: where the title sits, the margins, the footer */
+  --frame-x: 120px;
+  --frame-top: 88px;
+  --frame-bottom: 120px;
+  --title-gap: 52px;
+  --title-size: 72px;
+  --title-weight: 650;
+  --title-color: var(--color-text);
+  --title-measure: 30ch;
+  --eyebrow-color: var(--color-accent);
+  --footer-offset: 44px;
+  --footer-color: var(--color-text-subtle);
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+  --stroke-hair: 2px;
+  --stroke-thin: 3px;
+  --stroke-base: 5px;
+  --stroke-bold: 8px;
+  --shadow-sm: 0 2px 6px rgba(16, 24, 74, 0.08);
+  --shadow-md: 0 14px 40px rgba(16, 24, 74, 0.14);
+
+  /* Icons */
+  --icon-sm: 40px;
+  --icon-md: 56px;
+  --icon-lg: 88px;
+  --icon-xl: 140px;
+  --icon-stroke: 2;
+
+  /* Logo (set by the build when the theme folder has a logo file) */
+  --logo-url: none;
+  --logo-height: 34px;
+  --logo-width: 160px;
+
+  /* Motion */
+  --dur-fast: 160ms;
+  --dur-base: 420ms;
+  --dur-slow: 900ms;
+  --dur-slide: 220ms;
+  --dur-count: 1400ms;
+  --stagger: 90ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-bounce: linear(0, 0.004, 0.016, 0.035, 0.063, 0.098, 0.141 13.6%, 0.25, 0.391, 0.563, 0.765, 1, 0.891 40.9%, 0.848, 0.813, 0.785, 0.766, 0.754, 0.75, 0.754, 0.766, 0.785, 0.813, 0.848, 0.891 68.2%, 1 72.7%, 0.973, 0.953, 0.941, 0.938, 0.941, 0.953, 0.973, 1, 0.988, 0.984, 0.988, 1);
+
+  /* Engine chrome */
+  --progress-height: 6px;
+  --progress-color: var(--color-accent);
+  --progress-track: transparent;
+}
+
+/* ---- 3. Variant: dark --------------------------------------------------- */
+:root[data-variant="dark"] {
+  --color-bg: #0C1136;
+  --color-surface: #161D52;
+  --color-surface-2: #1F2868;
+  --color-text: #F1F3FF;
+  --color-text-muted: #B3BAE6;
+  --color-text-subtle: #8A93CC;
+  --color-border: #2C3680;
+
+  --color-accent: #8C97FF;
+  --color-accent-contrast: #0C1136;
+  --color-accent-soft: #1F2A7A;
+  --color-accent-2: #FF7C5E;
+  --color-accent-2-soft: #4A2333;
+
+  --color-positive: #4CC98A;
+  --color-negative: #FF7A7A;
+  --color-warning: #F0B43C;
+
+  --color-inverse-bg: #2B3BF0;
+  --color-inverse-text: #FFFFFF;
+  --color-inverse-muted: #D5D9FF;
+  --color-inverse-accent: #FFC2B3;
+  --color-inverse-border: #6672F5;
+  --color-inverse-surface: #4353F7;
+
+  --color-letterbox: #03051A;
+
+  --chart-1: #5F70FF;
+  --chart-2: #D95926;
+  --chart-3: #199E70;
+  --chart-4: #C98500;
+  --chart-5: #D55181;
+  --chart-6: #008300;
+  --chart-7: #9085E9;
+  --chart-8: #E66767;
+  --chart-neutral: #3A4488;
+  --chart-grid: #232C6C;
+  --chart-axis: #4A559E;
+  --chart-label: #B3BAE6;
+
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 14px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* ---- 4. Decor ----------------------------------------------------------- */
+/* The default theme adds nothing beyond the tokens. */
