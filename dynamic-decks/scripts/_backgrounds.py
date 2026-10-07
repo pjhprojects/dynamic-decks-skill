@@ -6,8 +6,10 @@ the template is made with nothing on the slide, LibreOffice draws it, and the
 picture becomes that kind's background. The picture is then measured once, so
 slides built later never have to look at it:
 
-    safe area    where the template's own text boxes sit: the slide's margins
-    ink          dark or light text, from the pixels under the safe area
+    text area    where the template's own title and text boxes sit. The boxes
+                 are the authority: text goes where the template puts text,
+                 over a band or a tint included
+    ink          dark or light text, from the pixels under each box
     calm         whether text can sit straight on the picture, or needs a panel
     description  a sentence about where the artwork is, for composing by hand
 
@@ -212,45 +214,86 @@ BODY_TYPES = (None, "body", "obj", "subTitle")
 DEFAULT_SAFE = (120, 88, 1680, 872)             # the built-in theme's frame
 
 
-def _boxes(root, size: tuple[int, int]) -> dict[str, list]:
-    cx, cy = size
-    out: dict[str, list] = {"title": [], "body": []}
-    tree = root.find("p:cSld/p:spTree", NS)
+INSETS = {"lIns": 91440, "tIns": 45720, "rIns": 91440, "bIns": 45720}      # PowerPoint's own, in EMU
+
+
+def _placeholders(root, role: str) -> list:
+    tree = root.find("p:cSld/p:spTree", NS) if root is not None else None
+    wanted = TITLE_TYPES if role == "title" else BODY_TYPES
+    out = []
     for sp in (tree.findall("p:sp", NS) if tree is not None else []):
         ph = sp.find("p:nvSpPr/p:nvPr/p:ph", NS)
-        if ph is None:
-            continue
-        typ = ph.get("type")
-        role = "title" if typ in TITLE_TYPES else "body" if typ in BODY_TYPES else None
-        if role is None:
-            continue
-        off, ext = sp.find("p:spPr/a:xfrm/a:off", NS), sp.find("p:spPr/a:xfrm/a:ext", NS)
-        box = None
-        if off is not None and ext is not None:
-            box = (int(off.get("x")) * STAGE_W / cx, int(off.get("y")) * STAGE_H / cy,
-                   int(ext.get("cx")) * STAGE_W / cx, int(ext.get("cy")) * STAGE_H / cy)
-        out[role].append(box)
+        if ph is not None and ph.get("type") in wanted:
+            out.append(sp)
     return out
+
+
+def _text_box(sp, fallback, size: tuple[int, int]) -> tuple | None:
+    """Where a placeholder's text can sit, in stage px: its box, less the inset PowerPoint keeps inside it.
+
+    A placeholder with no position, or no inset, of its own takes the master's (`fallback`).
+    """
+    cx, cy = size
+    box = None
+    for source in (sp, fallback):
+        if source is None:
+            continue
+        off, ext = source.find("p:spPr/a:xfrm/a:off", NS), source.find("p:spPr/a:xfrm/a:ext", NS)
+        if off is not None and ext is not None:
+            box = [int(off.get("x")), int(off.get("y")), int(ext.get("cx")), int(ext.get("cy"))]
+            break
+    if box is None:
+        return None
+    inset = dict(INSETS)
+    for source in (fallback, sp):                # the layout's own setting wins
+        body = source.find("p:txBody/a:bodyPr", NS) if source is not None else None
+        for key in inset:
+            if body is not None and body.get(key, "").isdigit():
+                inset[key] = int(body.get(key))
+    x, y = box[0] + inset["lIns"], box[1] + inset["tIns"]
+    w, h = box[2] - inset["lIns"] - inset["rIns"], box[3] - inset["tIns"] - inset["bIns"]
+    if w <= 0 or h <= 0:
+        return None
+    return (x * STAGE_W / cx, y * STAGE_H / cy, w * STAGE_W / cx, h * STAGE_H / cy)
+
+
+def _union(boxes: list) -> tuple | None:
+    boxes = [b for b in boxes if b]
+    if not boxes:
+        return None
+    left, top = max(0.0, min(b[0] for b in boxes)), max(0.0, min(b[1] for b in boxes))
+    right = min(float(STAGE_W), max(b[0] + b[2] for b in boxes))
+    bottom = min(float(STAGE_H), max(b[1] + b[3] for b in boxes))
+    return (round(left), round(top), round(right - left), round(bottom - top))
+
+
+def text_boxes(layout, master, size: tuple[int, int]) -> dict:
+    """The template's own text boxes on a layout: {"title": box, "body": box, "anchor": start|center|end}.
+
+    `title` is the title box, `body` everything the other text boxes cover,
+    either None when the layout has none. `anchor` is where the title sits in
+    its box top to bottom. All in stage px, insets taken off.
+    """
+    m_title, m_body = (_placeholders(master, role)[:1] or [None] for role in ("title", "body"))
+    titles = [_text_box(sp, m_title[0], size) for sp in _placeholders(layout, "title")]
+    bodies = [_text_box(sp, m_body[0], size) for sp in _placeholders(layout, "body")]
+    anchor = None
+    for sp in _placeholders(layout, "title")[:1] + [m_title[0]]:
+        body = sp.find("p:txBody/a:bodyPr", NS) if sp is not None else None
+        if body is not None and body.get("anchor"):
+            anchor = body.get("anchor")
+            break
+    return {"title": _union(titles[:1]), "body": _union(bodies),
+            "anchor": {"ctr": "center", "b": "end"}.get(anchor or "t", "start")}
 
 
 def text_area(layout, master, size: tuple[int, int]) -> tuple | None:
     """The rectangle the template's own title and text boxes cover on this layout, in stage px."""
-    mine, parent = _boxes(layout, size), _boxes(master, size)
-    found = []
-    for role in ("title", "body"):
-        for box in mine[role]:
-            box = box or next((b for b in parent[role] if b), None)   # a box with no position takes the master's
-            if box:
-                found.append(box)
-    if not found:
+    boxes = text_boxes(layout, master, size)
+    area = _union([boxes["title"], boxes["body"]])
+    if area is None or area[2] < 200 or area[3] < 120:
         return None
-    left, top = min(b[0] for b in found), min(b[1] for b in found)
-    right, bottom = max(b[0] + b[2] for b in found), max(b[1] + b[3] for b in found)
-    left, top = max(0.0, left), max(0.0, top)
-    right, bottom = min(float(STAGE_W), right), min(float(STAGE_H), bottom)
-    if right - left < 200 or bottom - top < 120:
-        return None
-    return (round(left), round(top), round(right - left), round(bottom - top))
+    return area
 
 
 def art_count(layout, master) -> int:
@@ -340,21 +383,24 @@ def _mean(pixels) -> tuple:
     return tuple(sum(p[i] for p in pixels) / n for i in range(3))
 
 
-def _clear_of_art(safe: tuple, far: list, w: int, h: int) -> tuple:
-    """Pull the text area in from artwork that runs along one of its edges (a band, a strip).
+def _fit(box: tuple, far: list, w: int, h: int) -> tuple[tuple, dict]:
+    """A template text box, checked against the picture. Returns (box, how far each side was pulled in).
 
-    Works on the quarter-size mask. An area that is artwork all over is left
-    alone: trimming cannot help it, and it gets a panel instead.
+    The box is the template's word on where text goes, and it stands: a box
+    that lies on artwork (a title on a band, text on a tinted panel) is meant
+    to. The one correction is for a box whose edge runs a little way under
+    artwork along the slide's side, as when a layout was left with default
+    boxes: that edge is pulled in, by at most 15% of the box.
     """
-    left, top = max(0, safe[0] // 4), max(0, safe[1] // 4)
-    right, bottom = min(w, (safe[0] + safe[2]) // 4), min(h, (safe[1] + safe[3]) // 4)
+    left, top = max(0, int(box[0]) // 4), max(0, int(box[1]) // 4)
+    right, bottom = min(w, int(box[0] + box[2]) // 4), min(h, int(box[1] + box[3]) // 4)
 
     def share(x0, y0, x1, y1) -> float:
         cells = [far[y * w + x] for y in range(y0, y1) for x in range(x0, x1)]
         return sum(cells) / len(cells) if cells else 0.0
-    if right - left < 40 or bottom - top < 30 or share(left, top, right, bottom) > 0.5:
-        return safe
-    step, limit_x, limit_y = 3, (right - left) * 3 // 10, (bottom - top) * 3 // 10
+    if right - left < 40 or bottom - top < 20 or share(left, top, right, bottom) > 0.5:
+        return box, {}
+    step, limit_x, limit_y = 3, (right - left) * 15 // 100, (bottom - top) * 15 // 100
     moved = {"left": 0, "right": 0, "top": 0, "bottom": 0}
     while moved["left"] < limit_x and share(left, top, left + step, bottom) > 0.4:
         left += step; moved["left"] += step
@@ -365,13 +411,55 @@ def _clear_of_art(safe: tuple, far: list, w: int, h: int) -> tuple:
     while moved["bottom"] < limit_y and share(left, bottom - step, right, bottom) > 0.4:
         bottom -= step; moved["bottom"] += step
     if not any(moved.values()) or share(left, top, right, bottom) > 0.08:
-        return safe                             # nothing along the edges, or what is left is not clear either (a gradient, a photo)
+        return box, {}                          # nothing along the edges, or what is left is not clear either
     gap = 8                                     # breathing room between the artwork and the text
     left += gap if moved["left"] else 0
     right -= gap if moved["right"] else 0
     top += gap if moved["top"] else 0
     bottom -= gap if moved["bottom"] else 0
-    return (left * 4, top * 4, (right - left) * 4, (bottom - top) * 4)
+    return ((left * 4, top * 4, (right - left) * 4, (bottom - top) * 4),
+            {side: (n + gap) * 4 for side, n in moved.items() if n})
+
+
+def _under(px: list, box: tuple, w: int, h: int) -> dict:
+    """The colors under a box: mean, darkest twentieth and lightest twentieth."""
+    x0, y0, bw, bh = (int(v) for v in box)
+    crop = [px[y * w + x] for y in range(max(0, y0 // 4), min(h, (y0 + bh) // 4)) for x in range(max(0, x0 // 4), min(w, (x0 + bw) // 4))] or px
+    crop.sort(key=lambda p: 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2])
+    k = max(1, len(crop) // 20)
+    return {"mean": _hex(_mean(crop)), "dark": _hex(_mean(crop[:k])), "light": _hex(_mean(crop[-k:])), "pixels": crop}
+
+
+def _room_below(full, title: tuple, body: tuple) -> int | None:
+    """How tall a title may grow, from the top of its box, before it reaches something the template draws.
+
+    Looks down from the bottom of the title box to the top of the text box for
+    the first row that is not the title's own background: a rule, the edge of
+    a band. Returns that height in stage px, or None when nothing is drawn
+    there (a longer title then only pushes the text down). Works on the full
+    picture, so a hairline counts. A title box over a photograph or other
+    uneven ground gets None: there is no one background to compare with.
+    """
+    from collections import Counter
+    from PIL import Image, ImageChops
+    f = full.width / STAGE_W
+    x0, x1 = int(title[0] * f), int((title[0] + title[2]) * f)
+    y_title, y0, y1 = int(title[1] * f), int((title[1] + title[3]) * f), int(body[1] * f)
+    if x1 - x0 < 40 or y1 - y0 < 2:
+        return None
+    ground = full.crop((x0, y_title, x1, y0)).resize((max(1, (x1 - x0) // 8), max(1, (y0 - y_title) // 8)), Image.BILINEAR)
+    counts = Counter((r >> 3, g >> 3, b >> 3) for r, g, b in _pixels(ground)).most_common(1)[0]
+    if counts[1] < 0.85 * ground.width * ground.height:
+        return None                             # no one background under the title
+    base = tuple((c << 3) + 4 for c in counts[0])
+    strip = full.crop((x0, y0, x1, y1))
+    bands = ImageChops.difference(strip, Image.new("RGB", strip.size, base)).split()
+    mask = ImageChops.lighter(ImageChops.lighter(bands[0], bands[1]), bands[2]).point(lambda v: 255 if v > 24 else 0)
+    rows = mask.resize((1, strip.height), Image.BOX).tobytes()      # per row: the share of it that is not background
+    for i, share in enumerate(rows):
+        if share > 5:                           # more than 2% of the row
+            return max(0, round((y0 + i) / f - title[1]) - 4)
+    return None
 
 
 def _largest_clear(far: list, w: int, h: int, within: tuple) -> tuple | None:
@@ -417,16 +505,27 @@ def _largest_clear(far: list, w: int, h: int, within: tuple) -> tuple | None:
     return box
 
 
-def measure(im, safe: tuple | None) -> dict:
-    """Facts about a background picture: is it flat, where the artwork is, and the colors under the text area."""
+def measure(im, safe: tuple | None, boxes: dict | None = None, search: bool = True) -> dict:
+    """Facts about a background picture: is it flat, where the artwork is, and the colors under the text.
+
+    `boxes` are the template's title and text boxes when it has both (see
+    text_boxes); `safe` is the one rectangle they cover when that is all there
+    is to go by. With neither, and `search` on, the empty part of the picture
+    is looked for: that is for pictures supplied by hand, which come with no
+    boxes. A template's layout is never second-guessed that way.
+    """
     from collections import Counter
-    from PIL import Image
+    from PIL import Image, ImageChops
     w, h = STAGE_W // 4, STAGE_H // 4
-    small = im.convert("RGB").resize((w, h), Image.BILINEAR)
+    full = im.convert("RGB")
+    small = full.resize((w, h), Image.BILINEAR)
     px = _pixels(small)
     top = Counter((r >> 4, g >> 4, b >> 4) for r, g, b in px).most_common(1)[0][0]
     dominant = _mean([p for p in px if (p[0] >> 4, p[1] >> 4, p[2] >> 4) == top])
     far = [max(abs(p[i] - dominant[i]) for i in range(3)) > 24 for p in px]
+    # the same count on the full picture, where a hairline is still a line and not a faint smear
+    bands = ImageChops.difference(full, Image.new("RGB", full.size, tuple(round(c) for c in dominant))).split()
+    fine = sum(ImageChops.lighter(ImageChops.lighter(bands[0], bands[1]), bands[2]).histogram()[25:]) / (full.width * full.height)
     grid = [[0.0] * 3 for _ in range(3)]
     for row in range(3):
         for col in range(3):
@@ -434,14 +533,24 @@ def measure(im, safe: tuple | None) -> dict:
             grid[row][col] = sum(cells) / len(cells)
     near = [max(abs(p[i] - dominant[i]) for i in range(3)) for p, is_far in zip(px, far) if not is_far]
     plain = sum(near) / max(1, len(near)) < 4   # one flat color with artwork on it, as opposed to a gradient or a photo
-    found = None
-    if safe is None and plain:                  # no text boxes to go by: look for the empty part of the picture
-        found = _largest_clear(far, w, h, DEFAULT_SAFE)
-    safe = found or (_clear_of_art(safe or DEFAULT_SAFE, far, w, h) if plain else (safe or DEFAULT_SAFE))
-    x0, y0, bw, bh = safe
-    crop = [px[y * w + x] for y in range(max(0, y0 // 4), min(h, (y0 + bh) // 4)) for x in range(max(0, x0 // 4), min(w, (x0 + bw) // 4))] or px
-    crop.sort(key=lambda p: 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2])
-    k = max(1, len(crop) // 20)
+
+    found, trimmed, zones = None, {}, None
+    if boxes and boxes.get("title") and boxes.get("body"):
+        zones = {}
+        for role in ("title", "body"):
+            zones[role], moved = _fit(boxes[role], far, w, h) if plain else (boxes[role], {})
+            for side, n in moved.items():
+                trimmed[side] = max(trimmed.get(side, 0), n)
+        safe = _union([zones["title"], zones["body"]])
+    elif safe is not None:
+        safe, trimmed = _fit(safe, far, w, h) if plain else (safe, {})
+    else:
+        if search and plain:
+            found = _largest_clear(far, w, h, DEFAULT_SAFE)
+        safe = found or DEFAULT_SAFE
+    x0, y0, bw, bh = (int(v) for v in safe)
+    under = _under(px, zones["body"] if zones else safe, w, h)
+    crop = under["pixels"]
     below = y0 + bh                             # how far down the slide stays empty under the text area
     if plain:
         cols = range(max(0, x0 // 4), min(w, (x0 + bw) // 4))
@@ -449,19 +558,27 @@ def measure(im, safe: tuple | None) -> dict:
         while row < h and cols and sum(far[row * w + x] for x in cols) / len(cols) < 0.01:
             row += 1
         below = row * 4
-    return {
-        "safe": safe,                           # the text area, pulled in from any artwork along its edges
+    out = {
+        "safe": tuple(safe),                    # everything the template's text boxes cover
         "found": found is not None and tuple(found) != DEFAULT_SAFE,   # worked out from the picture, not from text boxes
+        "trimmed": trimmed,                     # px a side was pulled in from artwork along the slide's edge
         "clear_below": below,
         "overall": _hex(_mean(px)),
         "dominant": _hex(dominant),
         "art": sum(far) / len(far),             # share of the slide that is not the main color
+        "fine_art": fine,                       # the same on the full picture: catches hairlines
         "grid": grid,                           # the same, for each ninth of the slide
-        "mean": _hex(_mean(crop)),              # under the text area
-        "dark": _hex(_mean(crop[:k])),          # its darkest twentieth
-        "light": _hex(_mean(crop[-k:])),        # its lightest twentieth
+        "mean": under["mean"],                  # under the text (the body box when the boxes are known)
+        "dark": under["dark"],                  # its darkest twentieth
+        "light": under["light"],                # its lightest twentieth
         "art_in_text": sum(1 for p in crop if max(abs(p[i] - dominant[i]) for i in range(3)) > 24) / len(crop),
     }
+    if zones:
+        title = _under(px, zones["title"], w, h)
+        out["zones"] = {"title": tuple(zones["title"]), "body": tuple(zones["body"]),
+                        "title_colors": {k: title[k] for k in ("mean", "dark", "light")},
+                        "title_room": _room_below(full, zones["title"], zones["body"])}
+    return out
 
 
 def footer_offset(im, left: int, right: int, offset: int = 44, limit: int = 160) -> int:
@@ -537,18 +654,23 @@ def describe(stats: dict, plan: dict) -> str:
 # --------------------------------------------------------------------------
 # From a template to one entry per kind of slide
 # --------------------------------------------------------------------------
-def _entry(im, safe, dark_text: str, light_text: str, mode: str) -> dict:
-    stats = measure(im, safe)
+def _entry(im, safe, dark_text: str, light_text: str, mode: str, boxes: dict | None = None, search: bool = True) -> dict:
+    stats = measure(im, safe, boxes, search)
     from _deck import contrast
-    if stats["art"] < 0.003 and contrast(stats["dark"], stats["light"]) < 1.12:
-        return {"flat": stats["dominant"]}
-    if mode != "always" and stats["art"] < 0.025:
-        return {"flat": stats["dominant"], "marks": round(stats["art"], 4)}
+    if stats["fine_art"] < 0.0003 and stats["art"] < 0.003 and contrast(stats["dark"], stats["light"]) < 1.12:
+        return {"flat": stats["dominant"]}       # one color, give or take a speck
     plan = choose_ink(stats, dark_text, light_text)
-    known = bool(safe) or stats["found"]
-    return {"image": im, "safe": tuple(stats["safe"]) if known else None, "art": round(stats["art"], 3),
-            "clear_below": stats["clear_below"] if safe else None,
-            "description": describe(stats, plan), **plan}
+    known = bool(safe) or bool(boxes) or stats["found"]
+    entry = {"image": im, "safe": tuple(stats["safe"]) if known else None, "art": round(max(stats["art"], stats["fine_art"]), 4),
+             "clear_below": stats["clear_below"] if (safe or boxes) else None, "trimmed": stats["trimmed"],
+             "description": describe(stats, plan), **plan}
+    if stats.get("zones"):
+        colors = dict(stats["zones"]["title_colors"], overall=stats["overall"])
+        over = choose_ink(colors, dark_text, light_text)
+        entry["zones"] = {"title": stats["zones"]["title"], "body": stats["zones"]["body"], "anchor": (boxes or {}).get("anchor", "start"),
+                          "room": stats["zones"]["title_room"],
+                          "title_text": over["text"], "title_bg": over["bg"], "title_ink": over["ink"], "title_calm": over["calm"]}
+    return entry
 
 
 def roomy(safe: tuple, min_w: int = 1100, min_h: int = 720, margin: int = 64) -> tuple:
@@ -654,11 +776,14 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
     to_draw.update({f"more{i}": entry for i, entry in enumerate(others)})
     pictures, why = render(src, to_draw, work / "render")
     master = ET.fromstring(z.read(master_part))
-    state: dict = {"skipped_art": False, "marks": []}
+    state: dict = {"skipped_art": False}
 
     def examine(key: str, entry: dict, what: str, hero: bool) -> dict | None:
         layout = ET.fromstring(z.read(entry["part"]))
         safe = text_area(layout, master, size)
+        boxes = text_boxes(layout, master, size) if key == "content" else None
+        if boxes and not (boxes["title"] and boxes["body"] and boxes["title"][1] + boxes["title"][3] <= boxes["body"][1] + 12):
+            boxes = None                          # no title above a text box: the one rectangle will have to do
         fill, el, owner = fill_of(layout, master, entry["part"], master_part)
         shapes = art_count(layout, master)
         css = css_gradient(el, resolve) if fill == "gradient" else None
@@ -688,8 +813,12 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
             if fill == "solid" and resolve(el):   # not drawn, but the file says which flat color it is
                 return {"flat": resolve(el)}
             return None
-        result = _entry(im, safe, dark_text, light_text, mode)
+        result = _entry(im, safe, dark_text, light_text, mode, boxes, search=False)
         if "flat" not in result:
+            if safe is None:
+                notes.append(f"{what} has no title or text box with a position in the template, so the built-in margins are used on it")
+            for side, n in (result.get("trimmed") or {}).items():
+                notes.append(f"on {what} the template's text box runs under artwork along the {side} edge; text starts {n}px further in")
             if css and (shapes == 0 or key not in pictures):
                 # a plain gradient stays as code: exact, sharp, and tiny. So does one whose shapes could not be drawn.
                 result["css"], result["image"] = css, None
@@ -700,8 +829,6 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
             if hero and not result["calm"] and result.get("safe"):
                 result["safe"] = roomy(result["safe"])
             result.update(layout=entry["name"] or entry["type"], rendered=key in pictures)
-        elif result.get("marks"):
-            state["marks"].append((what, result["marks"]))
         return result
 
     out: dict[str, dict] = {}
@@ -721,11 +848,6 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
         result.setdefault("layout", entry["name"])
         extra[slug(entry["name"], used)] = result
 
-    if state["marks"]:
-        where = [what for what, _ in state["marks"]]
-        listed = where[0] if len(where) == 1 else ", ".join(where[:-1]) + " and " + where[-1]
-        notes.append(f"{listed} {'has' if len(where) == 1 else 'have'} small marks ({max(m for _, m in state['marks']) * 100:.1f}% of the "
-                     "slide, often a logo) that were left out of the background; pass --backgrounds always to keep them as a picture")
     if not pictures:
         notes.append(f"{why}, so backgrounds were read from the file instead of being drawn"
                      + ("; artwork made of shapes was left out" if state["skipped_art"] else "")
@@ -804,3 +926,40 @@ def save(entry: dict, folder: Path, kind: str, saved: dict[str, str]) -> str | N
     (folder / name).write_bytes(data)
     saved[key] = name
     return name
+
+
+# --------------------------------------------------------------------------
+# Text that is part of the artwork
+# --------------------------------------------------------------------------
+def artwork_text(roots: list) -> list[tuple[str, str]]:
+    """(words, typeface) for text the template draws itself: text boxes on a master or layout that are not placeholders.
+
+    The typeface is "" when a run names none (it then takes the theme's body
+    font) and "+mj"/"+mn" when it names the theme's heading or body font.
+    """
+    found = []
+    for root in roots:
+        tree = root.find("p:cSld/p:spTree", NS) if root is not None else None
+        for sp in (tree.iter(f"{{{NS['p']}}}sp") if tree is not None else []):
+            if sp.find("p:nvSpPr/p:nvPr/p:ph", NS) is not None:
+                continue
+            for run in sp.iter(f"{{{NS['a']}}}r"):
+                text = "".join(t.text or "" for t in run.findall("a:t", NS)).strip()
+                if not text:
+                    continue
+                latin = run.find("a:rPr/a:latin", NS)
+                face = latin.get("typeface", "") if latin is not None else ""
+                found.append((text, "+mj" if face.startswith("+mj") else "+mn" if face.startswith("+mn") else face))
+    return found
+
+
+def installed_fonts() -> set[str] | None:
+    """Lower-case family names of the fonts on this machine, or None when that cannot be told."""
+    program = shutil.which("fc-list")
+    if not program:
+        return None
+    try:
+        out = subprocess.run([program, ":", "family"], capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return {name.strip().lower() for line in out.splitlines() for name in line.split(",") if name.strip()}

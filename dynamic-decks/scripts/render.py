@@ -48,6 +48,17 @@ PROBE = r"""
   if (body && body.scrollWidth > body.clientWidth + 3) {
     out.problems.push('content is ' + (body.scrollWidth - body.clientWidth) + 'px wider than the slide body');
   }
+  const title = slide.querySelector(':scope > .slide-title');
+  if (title) {                                  // a theme from a template may draw something under the title: a rule, a band's edge
+    const room = parseFloat(getComputedStyle(slide).getPropertyValue('--title-max')) || 0;
+    const eyebrow = slide.querySelector(':scope > .slide-eyebrow');
+    const top = (eyebrow || title).getBoundingClientRect().top;
+    const tall = Math.round((title.getBoundingClientRect().bottom - top) / scale);
+    if (room > 0 && tall > room + 2) {
+      out.problems.push('the title' + (eyebrow ? ' and its eyebrow are ' : ' is ') + tall + 'px tall, and ' + Math.round(room)
+        + 'px down the theme\'s background draws something (a rule, the edge of a band): shorten the title so it stays above it');
+    }
+  }
   const footer = slide.querySelector(':scope > .slide-footer');
   const footerTop = footer && getComputedStyle(footer).display !== 'none' ? footer.getBoundingClientRect().top : null;
   let off = 0, collide = 0, small = 0, smallest = 999, clipped = 0;

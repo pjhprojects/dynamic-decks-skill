@@ -95,6 +95,22 @@
   letter-spacing: var(--tracking-display);
   color: var(--title-color);
   text-wrap: balance;
+  /* A theme made from a template can give the title an area of its own: as
+     tall as the template's title box (--title-min), with the text placed in
+     it top, middle or bottom (--title-anchor). The body then starts where the
+     template's text box starts, whatever the template draws in between. */
+  min-height: var(--title-min, auto);
+  align-content: var(--title-anchor, normal);
+  flex-shrink: 0;
+}
+/* An eyebrow shares the title's area instead of pushing it down. (With --title-min at auto
+   this sum is not a length, the rule drops out, and the title is as tall as its text.) */
+.slide-eyebrow + .slide-title { min-height: max(0px, calc(var(--title-min, auto) - var(--text-sm) * var(--leading-snug) - var(--space-2))); }
+/* layouts with a title of their own size have no such area */
+.slide:where([data-layout="title"], [data-layout="section"], [data-layout="closing"], [data-layout="full-bleed"]) {
+  --title-min: auto;
+  --title-anchor: normal;
+  --title-max: none;
 }
 .slide-subtitle {
   margin: var(--space-3) 0 0;

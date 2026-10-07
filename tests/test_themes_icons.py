@@ -24,7 +24,9 @@ def tree_hash(folder):
 
 before = tree_hash(SKILL)
 
-proc = run("add_theme.py", "from-pptx", FIXTURES / "template.pptx", "--name", "greenfield", env=env)
+# --backgrounds never: this file is about flat themes (two variants, a logo of their own). With LibreOffice installed,
+# the default keeps the template's artwork, logo included, as a picture instead; test_backgrounds.py covers that.
+proc = run("add_theme.py", "from-pptx", FIXTURES / "template.pptx", "--name", "greenfield", "--backgrounds", "never", env=env)
 theme = lib / "themes" / "greenfield"
 t.ok("a theme is created from a PowerPoint template", proc.returncode == 0 and (theme / "theme.css").is_file(), proc.stdout[-300:] + proc.stderr[-300:])
 css = (theme / "theme.css").read_text(encoding="utf-8") if (theme / "theme.css").is_file() else ""

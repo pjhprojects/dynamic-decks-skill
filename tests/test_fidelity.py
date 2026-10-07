@@ -1,8 +1,10 @@
-"""Staying true to a template: sharp pictures.
+"""Staying true to a template: sharp pictures, and text where the template's own boxes put it.
 
-A rendered background must not lose fine detail: a hairline rule and small
-lettering stay sharp, so pictures are drawn at twice the stage size and kept
-without loss.
+Two things a rendered background must not lose. Fine detail: a hairline rule
+and small lettering stay sharp, so pictures are drawn at twice the stage size
+and kept without loss. And the template's layout: its title box and text box
+decide where text goes, not a guess from the picture, so a title sits above
+the rule drawn under it and on the band drawn behind it.
 
 Most of this needs LibreOffice to draw the templates and is skipped without it.
 """
@@ -104,10 +106,95 @@ if pic.size == (3840, 2160):
     dark = sum(1 for v in letters if v < 140)
     t.ok("small text in the artwork has solid strokes, not a gray smear", dark > 1500, dark)
 t.ok("such artwork costs a deck little", pic_path.stat().st_size < 60 * 1024, pic_path.stat().st_size)
+t.ok("text that is part of the artwork is reported", "the backgrounds include text that is part of the template" in proc.stdout
+     and "Northwind Trading" in proc.stdout)
 
 proc, photo, pcss, pmeta = make("template-photo.pptx", "photo")
 ppath = photo / "backgrounds" / "content.webp"
 t.ok("a photograph is compressed instead, and gently", ppath.is_file() and kind_of(ppath) == "lossy" and 1920 <= Image.open(ppath).width <= 2560,
      (kind_of(ppath), Image.open(ppath).size) if ppath.is_file() else "missing")
+
+# ---- the template's title box and text box decide where text goes --------------------------
+area = meta.get("backgrounds", {}).get("content", {}).get("title_area") or {}
+t.ok("the title gets an area as tall as the template's title box", 110 <= px(css, "--title-min") <= 140 and token(css, "--title-anchor") == "end",
+     token(css, "--title-min") + " " + token(css, "--title-anchor"))
+t.ok("the body starts where the template's text box starts", 50 <= px(css, "--title-gap") <= 90 and 60 <= px(css, "--frame-top") <= 95,
+     token(css, "--title-gap") + " " + token(css, "--frame-top"))
+t.ok("the title may be as wide as its box", 1250 <= px(css, "--title-measure") <= 1340, token(css, "--title-measure"))
+t.ok("the rule under the title sets how tall a title may be", 130 <= px(css, "--title-max") <= 150 and area.get("lines") == 2 and area.get("room") == px(css, "--title-max"),
+     (token(css, "--title-max"), area))
+t.ok("theme.json records the two boxes", len(area.get("box") or []) == 4 and len(meta["backgrounds"]["content"].get("body_area") or []) == 4)
+t.ok("the report says how much room a title has", "the template draws something under the title, so a title has room for 2 lines" in rule_report)
+
+proc, band, bcss, bmeta = make("template-band.pptx", "band")
+t.ok("a title box on a band stays on the band", 24 <= px(bcss, "--frame-top") <= 60 and token(bcss, "--title-anchor") == "center", token(bcss, "--frame-top"))
+t.ok("titles take the color that reads on the band", re.search(r"\.slide:where\(:not\(\[data-tone\], \[data-bg\][^{]*\{ --title-color: #FFFFFF;", bcss) is not None
+     and "the title sits on #0B2545 in the template" in proc.stdout, proc.stdout[-500:])
+t.ok("body text takes its color from under the text box, not from the band", token(bcss, "--color-text") in ("#000000", "#111111")
+     and bmeta["backgrounds"]["content"]["calm"] is True, token(bcss, "--color-text"))
+
+proc, shapes, scss, smeta = make("template-shapes.pptx", "shapes")
+t.ok("a template that draws nothing under the title puts no limit on it", token(scss, "--title-max") == "none" and px(scss, "--title-min") > 0, token(scss, "--title-max"))
+t.ok("a box that runs a little under artwork at the slide's edge is pulled in, and reported",
+     "on the section slide the template's text box runs under artwork along the left edge" in proc.stdout, proc.stdout[-600:])
+proc, brand, brcss, brmeta = make("template-brand.pptx", "brand")
+t.ok("a layout with no text boxes gets the built-in margins, not a guess from its picture",
+     'the "Quote" layout has no title or text box with a position in the template, so the built-in margins are used' in proc.stdout, proc.stdout[-700:])
+
+GEOMETRY = """(id) => {
+  const s = document.getElementById(id), sr = s.getBoundingClientRect();
+  const title = s.querySelector(':scope > .slide-title'), body = s.querySelector(':scope > .slide-body'), brow = s.querySelector(':scope > .slide-eyebrow');
+  const t = title.getBoundingClientRect(), range = document.createRange();
+  range.selectNodeContents(title);
+  const ink = range.getBoundingClientRect();
+  const c = getComputedStyle(title).color.match(/[\\d.]+/g).map(Number);
+  return { top: Math.round((brow || title).getBoundingClientRect().top - sr.top), textBottom: Math.round(ink.bottom - sr.top),
+           textTop: Math.round(ink.top - sr.top), boxBottom: Math.round(t.bottom - sr.top),
+           body: Math.round(body.getBoundingClientRect().top - sr.top), light: (c[0] + c[1] + c[2]) / 3 > 170 };
+}"""
+
+
+def geometry(deck_path, ids):
+    with sync_playwright() as p:
+        browser = launch(p)
+        page = browser.new_page(viewport={"width": 1920, "height": 1080})
+        page.goto(deck_path.as_uri())
+        page.wait_for_function("document.documentElement.classList.contains('deck-ready') && !!window.Deck")
+        page.evaluate("Deck.rest(true)")
+        out = {name: page.evaluate(GEOMETRY, name) for name in ids}
+        browser.close()
+        return out
+
+
+RULE_TOP, RULE_BOTTOM = 229, 233                # the rule: 21.2% down, 0.4% tall
+rule_deck = OUT / "fidelity-rule.html"
+build(DECK, rule_deck, "--theme", "rule", env=ENV)
+g = geometry(rule_deck, ("s-one", "s-brow", "s-long"))
+t.ok("in the deck, a title sits above the rule and the body below it", g["s-one"]["textBottom"] <= RULE_TOP and g["s-one"]["body"] >= RULE_BOTTOM
+     and g["s-one"]["textTop"] > 110, g["s-one"])
+t.ok("the title is placed in its area as the template has it: at the bottom", RULE_TOP - g["s-one"]["boxBottom"] < 30, g["s-one"])
+t.ok("an eyebrow shares the area: the body starts in the same place", g["s-brow"]["body"] == g["s-one"]["body"] and g["s-brow"]["textBottom"] <= RULE_TOP,
+     (g["s-brow"], g["s-one"]["body"]))
+proc = run("render.py", rule_deck, "--out", OUT / "fidelity-rule-render", "--json")
+report = json.loads(proc.stdout) if proc.stdout.strip().startswith("{") else {"slides": []}
+told = {s["number"]: [p for p in s["problems"] if "stays above it" in p] for s in report["slides"]}
+t.ok("the render check reports the title that runs into the rule, and only that one", [n for n, p in told.items() if p] == [3], told)
+
+BAND_BOTTOM = 216
+band_deck = OUT / "fidelity-band.html"
+build(DECK, band_deck, "--theme", "band", env=ENV)
+g = geometry(band_deck, ("s-one", "s-flat"))
+t.ok("in the deck, the title is on the band, in white, and the body is below it", g["s-one"]["light"] and g["s-one"]["textBottom"] < BAND_BOTTOM
+     and g["s-one"]["body"] > BAND_BOTTOM, g["s-one"])
+t.ok("a flat slide in the same theme keeps a dark title", not g["s-flat"]["light"], g["s-flat"])
+proc = run("render.py", band_deck, "--out", OUT / "fidelity-band-render", "--json")
+report = json.loads(proc.stdout) if proc.stdout.strip().startswith("{") else {"slides": [{"number": 0, "low_contrast": "no report"}]}
+low = {s["number"]: s["low_contrast"] for s in report["slides"] if s.get("low_contrast") and s["number"] in (1, 2, 4)}
+t.ok("titles and text read well against what is behind them", not low, low)
+
+starter = OUT / "fidelity-brand-starter.html"
+build(STARTER_SRC, starter, "--theme", "brand", env=ENV)
+proc = run("render.py", starter, "--out", OUT / "fidelity-brand-render", "--no-shots")
+t.ok("without a rule or band, two-line titles are not reported", "stays above it" not in proc.stdout, proc.stdout[-400:])
 
 t.done()

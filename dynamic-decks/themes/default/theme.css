@@ -180,6 +180,9 @@
   --title-weight: 650;
   --title-color: var(--color-text);
   --title-measure: 30ch;
+  --title-min: auto;               /* height of the title's own area, in px; auto lets the body follow the title directly */
+  --title-anchor: normal;          /* where the title sits in that area: start, center or end */
+  --title-max: none;               /* how tall eyebrow and title may be before they reach artwork under them; checked by render.py */
   --title-align: start;            /* start, center or end: the eyebrow, title and subtitle together */
   --hero-justify: flex-end;        /* where the text block sits on title and section slides: flex-start, center or flex-end */
   --eyebrow-color: var(--color-accent);

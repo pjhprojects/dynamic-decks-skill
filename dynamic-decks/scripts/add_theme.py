@@ -199,6 +199,10 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
         notes.append("the master background is a picture or gradient; a flat background color was used instead")
     if contrast(bg, text) < 4.5:
         notes.append(f"the template's text {text} on its background {bg} has low contrast; check the result")
+    drawn_text = []
+    if any(entry.get("rendered") for entry in list(kinds.values()) + list(more_kinds.values())):
+        used = [ET.fromstring(z.read(entry["part"])) for entry in _backgrounds.find_layouts(z, master_part).values()]
+        drawn_text = _backgrounds.artwork_text([master] + used)
 
     fonts = {}
     fs = theme.find("a:themeElements/a:fontScheme", NS)
@@ -207,6 +211,20 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
             latin = fs.find(f"{tag}/a:latin", NS)
             if latin is not None and latin.get("typeface"):
                 fonts[role] = latin.get("typeface")
+
+    if drawn_text:                               # words in the pictures were set by LibreOffice, with the fonts it had
+        have = _backgrounds.installed_fonts()
+        named = {"+mj": fonts.get("display", ""), "+mn": fonts.get("body", ""), "": fonts.get("body", "")}
+        faces = sorted({(named.get(face, face) or "").strip() for _, face in drawn_text} - {""})
+        absent = [f for f in faces if have is not None and f.lower() not in have]
+        sample = "; ".join(dict.fromkeys(f'"{words[:40]}"' for words, _ in drawn_text[:3]))
+        if absent:
+            notes.append(f"the backgrounds include text that is part of the template ({sample}). It is set in {', '.join(absent)}, "
+                         "which is not installed on this machine, so LibreOffice drew it in a stand-in font. Install the font here and "
+                         "make the theme again, or compare preview/backgrounds.png with the template")
+        else:
+            notes.append(f"the backgrounds include text that is part of the template ({sample}); it is now part of the picture, "
+                         "as sharp as the rest, and cannot be edited in a deck")
 
     frame: dict = {}
     title_color = None
@@ -932,6 +950,10 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             "calm": entry["calm"], "panel": entry["panel"], "art": entry.get("art"),
             "description": entry["description"],
         }
+        if entry.get("zones"):
+            z = entry["zones"]
+            bg_meta[kind]["title_area"] = {"box": [round(v) for v in z["title"]], "anchor": z.get("anchor"), "text": z.get("title_text")}
+            bg_meta[kind]["body_area"] = [round(v) for v in z["body"]]
 
     def picture_value(kind: str, entry: dict) -> tuple[str, str]:
         """(the value for --bg-image, what theme.json records) for one entry.
@@ -963,6 +985,7 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             notes.append(f"the template leaves a narrow text area on {what} slides; the side margins were eased to keep 900px for content")
         return left, right
 
+    title_rule = ""
     if picture:
         tokens["--bg-image"], recorded = picture_value("content", content)
         tokens["--bg-panel"] = panel_value(content)
@@ -979,8 +1002,43 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
                 bottom = 120                        # the panel runs down to the footer, so the text may too
             tokens["--frame-x"] = tokens["--frame-left"] = f"{left}px"
             tokens["--frame-right"] = f"{right}px"
-            tokens["--frame-top"] = f"{max(48, min(300, round(safe[1])))}px"
+            tokens["--frame-top"] = f"{max(24, min(300, round(safe[1])))}px"
             tokens["--frame-bottom"] = f"{bottom}px"
+            zones = content.get("zones")
+            if zones:
+                # The template's title box and text box, kept apart: the title gets an area as tall as its box and
+                # sits in it as the template has it, and the body starts where the text box starts. Whatever the
+                # template draws between the two (a rule, the edge of a band) then falls between title and body.
+                tbox, bbox = zones["title"], zones["body"]
+                area = max(40, min(420, round(tbox[3])))
+                tokens["--title-min"] = f"{area}px"
+                tokens["--title-anchor"] = zones.get("anchor") or "start"
+                tokens["--title-gap"] = f"{max(12, min(240, round(bbox[1] - (tbox[1] + tbox[3]))))}px"
+                tokens["--title-measure"] = f"{max(400, round(tbox[0] + tbox[2] - left))}px"
+                # When the template draws something under the title (a rule, the edge of a band), the title has that
+                # much room and no more. When it draws nothing there, a longer title just pushes the body down.
+                room = zones.get("room")
+                size = px_of("--title-size", 72)
+                if room:
+                    if size * 1.04 > room:         # one line has to fit
+                        size = max(40, int(room / 1.04))
+                        tokens["--title-size"] = f"{size}px"
+                        notes.append(f"the title size was reduced to {size}px so one line fits above what the template draws under it")
+                    tokens["--title-max"] = f"{room}px"
+                    fits = max(1, int(room // (size * 1.04)))
+                    chars = int(px_of("--title-measure", 1000) / (size * 0.5))
+                    bg_meta["content"]["title_area"].update(lines=fits, room=room)
+                    notes.append(f"the template draws something under the title, so a title has room for {fits} line{'s' if fits > 1 else ''} "
+                                 f"of about {chars} characters ({room}px); the render check reports a title that runs into it")
+                # The title may sit on something the body does not: a band, a tint. Its colors then go in a rule
+                # for the slides that show this background, so a flat slide (a tone, data-bg="none") keeps its own.
+                if zones.get("title_text") and (contrast(text, zones["title_bg"]) < 4.5 or contrast(zones["title_bg"], bg) > 1.25):
+                    eyebrow = ensure_contrast(accent, zones["title_bg"], 4.5, prefer="lighter" if zones.get("title_ink") == "light" else "darker")
+                    title_rule = ("/* Titles sit on " + zones["title_bg"] + " in the content background. */\n"
+                                  '.slide:where(:not([data-tone], [data-bg], [data-layout="title"], [data-layout="section"], '
+                                  '[data-layout="closing"], [data-layout="full-bleed"])) { '
+                                  f"--title-color: {zones['title_text']}; --eyebrow-color: {eyebrow}; }}\n")
+                    notes.append(f"the title sits on {zones['title_bg']} in the template, so titles on that background are {zones['title_text']}")
             if content.get("image") is not None and content["calm"]:
                 base_offset = px_of("--footer-offset", 44)
                 lift = _backgrounds.footer_offset(content["image"], left, right, offset=base_offset)
@@ -1013,6 +1071,8 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
                 groups.append((entry, [kind]))
         for entry, names in groups:
             decl: dict[str, str] = {"--bg-image": "none", "--bg-panel": "none"}
+            if "--title-min" in tokens:
+                decl.update({"--title-min": "auto", "--title-anchor": "normal", "--title-gap": "52px", "--title-measure": "30ch", "--title-max": "none"})
             recorded = ""
             if entry and "flat" in entry:
                 flat = entry["flat"]
@@ -1050,6 +1110,8 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         if not isinstance(entry, dict):
             continue
         decl = {"--bg-image": "none", "--bg-panel": "none"}
+        if "--title-min" in tokens and "flat" not in entry:
+            decl.update({"--title-min": "auto", "--title-anchor": "normal", "--title-gap": "52px", "--title-measure": "30ch", "--title-max": "none"})
         recorded = ""
         if "flat" in entry:
             ebg = entry["flat"]
@@ -1133,6 +1195,7 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
     if len(blocks) > 1:
         css += f"\n/* ---- 3. Variant: {other} {'-' * 52} */\n" + blocks[1] + "\n"
     css += "\n/* ---- 4. Decor ----------------------------------------------------------- */\n/* Optional extra CSS for the frame: rules, marks, logo placement. */\n"
+    css += title_rule
     if footer_rules:
         css += "/* The footer, arranged as in the template: where the label and the slide number sit. */\n" + footer_rules
     if layout_rules:
@@ -1321,13 +1384,20 @@ def background_sheet(out: Path, target: Path) -> bool:
         im = im.resize((tw, th))
         x, y = pad + (i % cols) * (tw + pad), pad + (i // cols) * (th + label + pad) + label
         sheet.paste(im, (x, y))
-        if e.get("safe"):
-            sx, sy, sw, sh = (v / 3 for v in e["safe"])
+        body_line = (255, 255, 255) if e["ink"] == "light" else (20, 20, 20)
+        areas = [(e.get("safe"), body_line)]
+        if e.get("title_area") and e.get("body_area"):
+            title_line = (255, 255, 255) if contrast(e["title_area"].get("text") or "#000000", "#FFFFFF") < 3 else (20, 20, 20)
+            areas = [(e["title_area"]["box"], title_line), (e["body_area"], body_line)]
+        for box, line in areas:
+            if not box:
+                continue
+            sx, sy, sw, sh = (v / 3 for v in box)
             for grow in range(3):
-                draw.rectangle((x + sx - grow, y + sy - grow, x + sx + sw + grow, y + sy + sh + grow),
-                               outline=(255, 255, 255) if e["ink"] == "light" else (20, 20, 20))
+                draw.rectangle((x + sx - grow, y + sy - grow, x + sx + sw + grow, y + sy + sh + grow), outline=line)
         name = f'data-bg="{kind}"' if e.get("extra") else kind
-        draw.text((x, y - label + 8), f"{name}: {e['ink']} text" + ("" if e["calm"] else ", panel") + "  (box = text area)", fill=(230, 232, 240))
+        boxes = "boxes = title area and text area" if len(areas) == 2 else "box = text area"
+        draw.text((x, y - label + 8), f"{name}: {e['ink']} text" + ("" if e["calm"] else ", panel") + f"  ({boxes})", fill=(230, 232, 240))
     sheet.save(target)
     return True
 
@@ -1394,8 +1464,8 @@ def main() -> None:
     p1 = sub.add_parser("from-pptx", help="create a theme from a PowerPoint template")
     p1.add_argument("template", help=".pptx or .potx file")
     p1.add_argument("--backgrounds", choices=("auto", "always", "never"), default="auto",
-                    help="keep the template's backgrounds as pictures: auto (when they are more than a flat color or a small "
-                         "mark), always (even small marks), never (flat colors only)")
+                    help="auto keeps whatever the template draws behind a slide as a picture (the default; always means the "
+                         "same); never gives a flat theme with a dark variant and the logo in the footer")
     p1.add_argument("--no-extra-backgrounds", action="store_true",
                     help="keep backgrounds for content, title, section and closing slides only, not for the template's other layouts")
     p1.add_argument("--master", metavar="NUMBER_OR_NAME",
