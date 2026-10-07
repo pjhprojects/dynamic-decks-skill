@@ -231,9 +231,9 @@ t.ok("LibreOffice draws artwork made of shapes", proc.returncode == 0 and bgs.ge
      and (shapes / "backgrounds" / "content.webp").is_file(), proc.stdout[-400:] + proc.stderr[-300:])
 if (shapes / "backgrounds" / "content.webp").is_file():
     pic = Image.open(shapes / "backgrounds" / "content.webp").convert("RGB")
-    band, paper, strip = pic.getpixel((60, 500)), pic.getpixel((900, 500)), pic.getpixel((900, 1070))
+    band, paper, strip = pic.getpixel((120, 1000)), pic.getpixel((1800, 1000)), pic.getpixel((1800, 2140))
     t.ok("the picture has the template's band, strip and paper", band[0] > 170 and band[1] < 60 and min(paper) > 240 and max(strip) < 60, (band, paper, strip))
-    t.ok("it is 1920 x 1080", pic.size == (1920, 1080), pic.size)
+    t.ok("it is drawn at twice the stage size", pic.size == (3840, 2160), pic.size)
 t.ok("the text area starts clear of the band", px(css, "--frame-left") >= 190, px(css, "--frame-left"))
 t.ok("the logo is part of the picture, not placed twice", not (shapes / "logo.png").exists() and meta.get("logo") is None)
 t.ok("the title slide is drawn with its own shapes", bgs.get("title", {}).get("drawn_by_libreoffice") is True and (shapes / "backgrounds" / "title.webp").is_file())

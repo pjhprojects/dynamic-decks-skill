@@ -11,6 +11,9 @@ slides built later never have to look at it:
     calm         whether text can sit straight on the picture, or needs a panel
     description  a sentence about where the artwork is, for composing by hand
 
+Pictures are drawn at twice the stage size, so fine lines and any text
+that is part of the artwork stay sharp full screen and on dense displays.
+
 Used by add_theme.py. Needs Pillow; rendering needs LibreOffice (soffice).
 Without LibreOffice a background that is a single picture is still taken
 straight from the file, and a simple gradient is turned into CSS.
@@ -35,6 +38,8 @@ NS = {
     "ct": "http://schemas.openxmlformats.org/package/2006/content-types",
 }
 STAGE_W, STAGE_H = 1920, 1080
+RENDER_SCALE = 2                                # pictures are drawn and kept at twice the stage size
+MAX_W, MAX_H = STAGE_W * RENDER_SCALE, STAGE_H * RENDER_SCALE
 KINDS = ("content", "title", "section", "closing")
 # which layout stands for which kind of slide, best match first
 LAYOUT_TYPES = {
@@ -185,7 +190,7 @@ def render(src: Path, layouts: dict[str, dict], work: Path, timeout: int = 180) 
             return {}, f"could not prepare the template for rendering ({exc})"
         decks.append(deck)
     size = ('png:impress_png_Export:{"PixelWidth":{"type":"long","value":"%d"},"PixelHeight":{"type":"long","value":"%d"}}'
-            % (STAGE_W, STAGE_H))
+            % (MAX_W, MAX_H))
     profile = work / "profile"                  # its own profile, so a running LibreOffice is left alone
     try:
         proc = subprocess.run([program, f"-env:UserInstallation={profile.as_uri()}", "--headless", "--convert-to", size,
@@ -666,7 +671,9 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
             if target in z.namelist():
                 try:
                     import io
-                    im = Image.open(io.BytesIO(z.read(target))).convert("RGB").resize((STAGE_W, STAGE_H), Image.LANCZOS)
+                    im = Image.open(io.BytesIO(z.read(target))).convert("RGB")
+                    wide = max(STAGE_W, min(MAX_W, im.width))        # as sharp as the file has it, up to twice the stage
+                    im = im.resize((wide, wide * STAGE_H // STAGE_W), Image.LANCZOS)
                 except Exception:  # noqa: BLE001
                     im = None
         elif css:
@@ -743,12 +750,15 @@ def from_files(files: dict[str, Path], dark_text: str, light_text: str) -> tuple
             continue
         if abs(im.width / im.height - 16 / 9) > 0.03:
             notes.append(f"the {kind} background is {im.width}x{im.height}, not 16:9; it was cropped to fit")
-            scale = max(STAGE_W / im.width, STAGE_H / im.height)
-            im = im.resize((round(im.width * scale), round(im.height * scale)), Image.LANCZOS)
-            left, top = (im.width - STAGE_W) // 2, (im.height - STAGE_H) // 2
-            im = im.crop((left, top, left + STAGE_W, top + STAGE_H))
-        else:
-            im = im.resize((STAGE_W, STAGE_H), Image.LANCZOS)
+            tall = min(im.height, im.width * 9 // 16)
+            wide = tall * 16 // 9
+            left, top = (im.width - wide) // 2, (im.height - tall) // 2
+            im = im.crop((left, top, left + wide, top + tall))
+        if im.width < STAGE_W:
+            notes.append(f"the {kind} background is only {im.width}px wide; it will look soft on a {STAGE_W}px stage. Use a picture "
+                         f"at least {STAGE_W}px wide, ideally {MAX_W}px")
+        wide = max(STAGE_W, min(MAX_W, im.width))    # as sharp as the file has it, up to twice the stage
+        im = im.resize((wide, wide * STAGE_H // STAGE_W), Image.LANCZOS)
         result = _entry(im, None, dark_text, light_text, "always")
         if "flat" not in result:
             result.update(layout=Path(path).name, rendered=False)
@@ -756,12 +766,23 @@ def from_files(files: dict[str, Path], dark_text: str, light_text: str) -> tuple
     return out, notes
 
 
+PHOTO_BYTES = 700 * 1024                        # an exact copy heavier than this is a photograph, not line artwork
+PHOTO_W = 2560
+
+
 def save(entry: dict, folder: Path, kind: str, saved: dict[str, str]) -> str | None:
-    """Write an entry's picture into the theme and return its file name. Identical pictures share a file."""
+    """Write an entry's picture into the theme and return its file name. Identical pictures share a file.
+
+    Line artwork, flat shapes and text are kept exactly, pixel for pixel, at
+    full size: any loss shows as blur on a rule or on lettering. Only a
+    picture too heavy to keep that way, which means a photograph, is
+    compressed, and gently.
+    """
     im = entry.get("image")
     if im is None:
         return None
     import io
+    from PIL import Image
     key = hashlib.sha1(im.tobytes()).hexdigest()
     if key in saved:
         return saved[key]
@@ -770,9 +791,11 @@ def save(entry: dict, folder: Path, kind: str, saved: dict[str, str]) -> str | N
     try:
         buf = io.BytesIO()
         im.save(buf, "WEBP", lossless=True, method=4)
-        if buf.tell() > 350 * 1024:               # a photo: lossless is too heavy for every deck to carry
+        if buf.tell() > PHOTO_BYTES:
+            photo = im if im.width <= PHOTO_W else im.resize((PHOTO_W, PHOTO_W * im.height // im.width), Image.LANCZOS)
             buf = io.BytesIO()
-            im.save(buf, "WEBP", quality=88, method=5)
+            photo.save(buf, "WEBP", quality=92, method=5)
+            entry["photo"] = True
         name, data = f"{kind}.webp", buf.getvalue()
     except Exception:  # noqa: BLE001  (Pillow built without WebP)
         buf = io.BytesIO()
