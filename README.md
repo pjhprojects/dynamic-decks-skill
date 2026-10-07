@@ -6,7 +6,9 @@ Add it to Claude, ChatGPT, Codex or another agent that uses skills. Ask for a de
 
 ![The DynamicDecks showcase playing: a title that retypes itself, figures counting up, a request typing while a slide builds, a truck driving a route, a ranking re-sorting year by year, a chart revealed in three clicks, sliders redrawing a forecast, and a network following the pointer](docs/images/demo.gif)
 
-Every slide in that clip is live in the browser, with no video and no images. It is the [showcase deck](examples/dynamic-decks-showcase.html) that ships with the skill: download it, double-click it, and press the right arrow.
+**[Open the live showcase](https://pjhprojects.github.io/dynamic-decks-skill/examples/dynamic-decks-showcase.html)** and press the right arrow.
+
+Every slide in that clip is live in the browser, with no video and no images. It is the showcase deck that ships with the skill. To see that it really is one self-contained file, download [`examples/dynamic-decks-showcase.html`](examples/dynamic-decks-showcase.html) and double-click it.
 
 ## What it is
 
@@ -63,7 +65,7 @@ That last one is edit mode: press `E`, click the thing you mean, paste the refer
 - **Anything else, written for you.** Any slide can carry its own HTML, SVG, CSS and JavaScript: canvas, interactive controls, simulations, embedded video. Styles and scripts are scoped to their slide, so one ambitious slide cannot break the others.
 - **Interactive without getting in the way.** Clicking a slide advances the deck; clicking a slider, button or link on it does not.
 - **Every animation has a still frame.** Slides are written in their finished state and animate toward it, so PDFs, the overview, the presenter's preview and viewers who turn motion off all see the complete slide. The build fails if a slide breaks this.
-- **Fifteen ready-made layouts** for the quiet slides in between: title, section, bullets, two-column, big number, stats, cards, chart, image, quote, diagram, table, timeline, closing and full-bleed. The [starter deck](examples/dynamic-decks-starter.html) has one of each.
+- **Fifteen ready-made layouts** for the quiet slides in between: title, section, bullets, two-column, big number, stats, cards, chart, image, quote, diagram, table, timeline, closing and full-bleed. The [starter deck](https://pjhprojects.github.io/dynamic-decks-skill/examples/dynamic-decks-starter.html) has one of each.
 
 ### Charts, diagrams and images
 
