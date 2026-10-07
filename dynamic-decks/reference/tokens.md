@@ -60,6 +60,20 @@ padding and offsets so custom slides share the deck's rhythm.
 `--title-gap` the space under the title; `--title-size`, `--title-weight`,
 `--title-color`, `--title-measure` shape the slide title.
 
+`--frame-left` and `--frame-right` are the side margins on their own. They
+equal `--frame-x` unless the theme's background has artwork down one side, so
+use these two when placing something against a margin by hand. `--hero-bottom`
+is the space under the text on title and section slides, and
+`--section-number-gap` the space between a section's number and its title
+(`auto` pins the number to the top of the slide).
+
+## Background
+
+Set by the theme, not by slides. `--bg-image` is the picture or gradient behind
+a slide (`none` in a flat theme) and `--bg-panel` the translucent panel behind
+the text when that picture is too busy to read over. A slide chooses with an
+attribute instead: `data-bg="title"`, `"section"`, `"closing"` or `"none"`.
+
 ## Shape
 
 `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-pill`;

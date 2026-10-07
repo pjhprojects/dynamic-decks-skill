@@ -4,6 +4,43 @@ All notable changes to DynamicDecks are listed here. Versions follow
 [semantic versioning](https://semver.org): the number in
 `dynamic-decks/scripts/_deck.py` and the release tag are kept the same.
 
+## 1.1.0 (2026-10-07)
+
+Branded backgrounds from PowerPoint templates are kept as they were designed.
+
+- **Picture backgrounds.** When a template's background is more than a flat
+  color (a photo, a gradient, bands and marks drawn with shapes), `add_theme.py
+  from-pptx` keeps it as a picture for each kind of slide: content, title,
+  section and closing. With LibreOffice installed the pictures are drawn from
+  the template itself, so they are exact. Without it, a photo background is
+  taken from the file, a plain gradient is written as CSS, and artwork made of
+  shapes is left out and reported.
+- **Each picture is measured once.** The theme records the text area (from the
+  template's own text boxes, pulled in from artwork along the edges), whether
+  text should be dark or light, whether the picture is calm enough to read over
+  or needs a panel, and a one-sentence description. Margins, text colors and
+  the panel follow from that, so slides written later need not look at the
+  picture. `theme.json` holds the measurements under `backgrounds`.
+- **Per slide:** `data-bg="title"`, `"section"` or `"closing"` puts any slide
+  on that picture with its margins and colors; `data-bg="none"` and any
+  `data-tone` give a flat slide.
+- **Your own pictures:** `--background content=bg.png` (also `title`,
+  `section`, `closing`) on `new`, `from-pptx` and `from-spec`. The largest
+  empty part of the picture becomes the text area.
+- `--backgrounds auto|always|never` on `from-pptx`, and `--preview` now also
+  writes `preview/backgrounds.png`, each picture with its text area outlined.
+- **Real contrast check.** `render.py` compares every piece of text with the
+  pixels actually behind it (picture, photo or colored shape) and reports text
+  that is hard to read there, with a higher bar on a busy patch. `--no-contrast`
+  skips it. Decorative text marked `aria-hidden="true"` is left alone.
+- New tokens: `--frame-left`, `--frame-right`, `--hero-bottom`, `--bg-image`,
+  `--bg-panel`. Themes made with 1.0.0 work unchanged.
+- Title slides in a flat brand color: muted text on them now always clears
+  4.5:1.
+
+Tested on templates made for the tests (a photo background, shape artwork, a
+busy picture), not yet on a wide range of real company templates.
+
 ## 1.0.0 (2026-10-06)
 
 First public release. The project was called html-deck while it was being built;

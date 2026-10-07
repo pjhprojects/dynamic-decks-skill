@@ -92,6 +92,7 @@ That last one is edit mode: press `E`, click the thing you mean, paste the refer
 - **Everything is a token.** Colors, fonts, sizes, spacing, radii, shadows and motion speeds are named values. Slides use the names, never raw values, so a theme swap restyles the whole deck, including the custom slides, the charts and the canvas.
 - **Light and dark** variants in the built-in theme; press `T` to switch while presenting.
 - **Theme from a PowerPoint template.** Give your agent a `.pptx` or `.potx` and it reads the colors, fonts and logo into a theme.
+- **Branded backgrounds stay intact.** When a template's background is a photo, a gradient or artwork, it is kept as a picture for each kind of slide (content, title, section, closing) instead of being rebuilt by guesswork. Each picture is measured once: where text may go, whether it should be dark or light, and whether it needs a panel behind it. Slides written later follow those rules without anyone looking at the picture again.
 - **Theme from a brand guide.** Give it your colors and fonts; font files are embedded so the deck looks the same on every machine.
 - **Re-theme a finished deck,** or recover the theme from a deck someone sent you.
 - **Your own icon set.** Import a folder of SVGs; they are cleaned, made theme-colored and searchable like the built-in set.
@@ -105,7 +106,7 @@ Press `E` and click anything on a slide. A reference such as `[slide 7 › card 
 ### Checks before you get the file
 
 - **The build refuses** hard-coded colors and fonts, icons that do not exist, slides without speaker notes, anything loaded from the internet, and animation with no still frame.
-- **A browser check** opens the finished deck in Chromium, screenshots every slide and flags content that overflows or gets cut off, so the agent looks at each slide before you do.
+- **A browser check** opens the finished deck in Chromium, screenshots every slide and flags content that overflows or gets cut off, and text that is hard to read against the pixels really behind it, so the agent looks at each slide before you do.
 
 ## DynamicDecks or PowerPoint?
 
@@ -146,7 +147,7 @@ cp -r dynamic-decks-skill/dynamic-decks ~/.agents/skills/
 
 **Other agents** (not yet tested). Gemini CLI, Cursor, GitHub Copilot, VS Code, Goose, OpenCode and others support Agent Skills; the [Agent Skills site](https://agentskills.io) links to each one's instructions. Copy the `dynamic-decks` folder to wherever that agent keeps skills. If you try one, please open an issue and say how it went.
 
-Then ask for a deck. The scripts need Python 3.9 or later. Three packages are optional, and each script says what it skipped without them: Pillow (image compression and contact sheets), Playwright with Chromium (screenshots, overflow checks and PDF export) and fontTools (reading font files when you add a theme).
+Then ask for a deck. The scripts need Python 3.9 or later. Four things are optional, and each script says what it skipped without them: Pillow (image compression, contact sheets and background pictures), Playwright with Chromium (screenshots, overflow and contrast checks, PDF export), fontTools (reading font files when you add a theme) and LibreOffice (drawing a PowerPoint template's backgrounds exactly as designed; without it, photo and gradient backgrounds are still kept, and artwork made of shapes is left out and reported).
 
 ## Keys
 
@@ -207,7 +208,7 @@ Themes and icon sets you add are stored outside the skill, in `~/.dynamic-decks`
 ```bash
 pip install -r requirements-dev.txt
 python -m playwright install chromium
-python tests/run_all.py          # all tests, about a minute
+python tests/run_all.py          # all tests, about two minutes
 python tests/run_all.py edit     # only test files whose name contains "edit"
 python tools/package.py          # dist/dynamic-decks.skill, and refreshes the example decks
 python tools/screenshots.py      # remakes docs/images (the demo needs ffmpeg)
@@ -221,6 +222,7 @@ Ideas, bug reports and pull requests are welcome, and so are new showcase slides
 - In the preview pane of an AI assistant, the presenter window (`S`) and PDF export (`P`) do not work. Download the file and open it in your browser; the deck says so if you press those keys in a preview.
 - Decks are tested in Chromium only (Chrome and Edge share that engine). Firefox and Safari are untested.
 - Decks are for desktop browsers. Phones are out of scope.
+- Picture backgrounds from PowerPoint templates have been tested on templates made for the tests, not yet on a wide range of real company templates. A theme on a picture background has one look, with no automatic dark variant.
 - Recipients cannot edit a slide by clicking into it.
 - What a slider or other control is set to stays in that window; it is not mirrored to the presenter window.
 - Some mail systems block `.html` attachments; zip the file or share a link to it.

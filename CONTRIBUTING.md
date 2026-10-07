@@ -37,8 +37,13 @@ that breaks one of them needs a very good reason.
 6. **Deck sources stay plain.** The build must not require changes to how
    slides are written, and `unpack.py` must be able to recover a source from
    any built deck.
-7. **Scripts run on Python 3.9 with the standard library.** Pillow, Playwright
-   and fontTools are optional; a script that needs one says what it skipped.
+7. **Scripts run on Python 3.9 with the standard library.** Pillow, Playwright,
+   fontTools and LibreOffice are optional; a script that needs one says what it
+   skipped.
+8. **A template's artwork is drawn, not reinterpreted.** A background that is
+   more than a flat color is kept as a picture and measured once (text area,
+   text color, calm or busy). Slides follow the stored measurements; nothing
+   guesses at a picture when a deck is built.
 
 ## Where things are
 
@@ -52,8 +57,13 @@ that breaks one of them needs a very good reason.
   slide is welcome when it shows a technique the deck does not have yet. It
   must pass the checks with no warnings, use only theme tokens, have a
   complete still frame, and carry the sentence someone could ask for it with.
-- `tests/fixtures/` holds a deliberately broken deck, a PowerPoint template and
-  a few icons used by the tests.
+- `tests/fixtures/` holds a deliberately broken deck, PowerPoint templates and
+  a few icons used by the tests. The three `template-*.pptx` files (a photo
+  background, artwork made of shapes, a busy picture) are written by
+  `tests/fixtures/make_templates.py`, which needs `python-pptx`; run it only to
+  change them.
+- The background tests draw those templates with LibreOffice when it is
+  installed (`soffice` on the PATH) and skip that part when it is not.
 
 ## Releasing
 

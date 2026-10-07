@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Backgrounds fixture</title>
+<meta name="deck:footer" content="Backgrounds fixture">
+</head>
+<body>
+<main class="deck">
+
+<section class="slide" data-layout="title" id="s-title">
+  <h1 class="slide-title">A title slide</h1>
+  <p class="slide-subtitle">It takes the template's title background.</p>
+  <aside class="notes"><p>A fixture slide for the background tests.</p></aside>
+</section>
+
+<section class="slide" data-layout="bullets" id="s-content">
+  <h2 class="slide-title">A content slide</h2>
+  <div class="slide-body">
+    <ul>
+      <li>It takes the template's content background.</li>
+      <li>Its margins keep the text off the artwork.</li>
+    </ul>
+  </div>
+  <aside class="notes"><p>A fixture slide for the background tests.</p></aside>
+</section>
+
+<section class="slide" data-layout="bullets" data-tone="inverse" id="s-tone">
+  <h2 class="slide-title">A slide with a tone of its own</h2>
+  <div class="slide-body"><p>It is a flat color: no picture.</p></div>
+  <aside class="notes"><p>A fixture slide for the background tests.</p></aside>
+</section>
+
+<section class="slide" data-layout="bullets" data-bg="none" id="s-none">
+  <h2 class="slide-title">A slide that opts out</h2>
+  <div class="slide-body"><p>It asks for no picture.</p></div>
+  <aside class="notes"><p>A fixture slide for the background tests.</p></aside>
+</section>
+
+<section class="slide" data-layout="bullets" data-bg="title" id="s-optin">
+  <h2 class="slide-title">A content slide on the title background</h2>
+  <div class="slide-body"><p>It asks for the title picture and takes its colors.</p></div>
+  <aside class="notes"><p>A fixture slide for the background tests.</p></aside>
+</section>
+
+<section class="slide" data-layout="bullets" id="s-over">
+  <h2 class="slide-title">Text placed over the artwork</h2>
+  <div class="slide-body">
+    <p>This paragraph is where the theme puts it.</p>
+    <p class="over">This one was pushed onto the picture by hand and is hard to read.</p>
+  </div>
+  <style data-slide-scope>
+    .over { position: absolute; right: 40px; top: 420px; width: 480px; max-width: none; margin: 0; }
+  </style>
+  <aside class="notes"><p>A fixture slide for the background tests.</p></aside>
+</section>
+
+<section class="slide" data-layout="closing" id="s-closing">
+  <h2 class="slide-title">A closing slide</h2>
+  <p class="slide-subtitle">It shares the title background unless the template has one of its own.</p>
+  <aside class="notes"><p>A fixture slide for the background tests.</p></aside>
+</section>
+
+</main>
+</body>
+</html>

@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DynamicDecks starter</title>
-<meta name="generator" content="DynamicDecks 1.0.0">
+<meta name="generator" content="DynamicDecks 1.1.0">
 <meta name="deck:footer" content="DynamicDecks starter">
 <meta name="deck:theme" content="default">
 <meta name="deck:variant" content="light">
 <meta name="deck:icons" content="lucide">
 <link rel="icon" href="data:,">
-<!-- Built with DynamicDecks 1.0.0. Engine and layouts: MIT License, Copyright (c) 2026 The DynamicDecks authors. The slides are the work of the deck's author. -->
+<!-- Built with DynamicDecks 1.1.0. Engine and layouts: MIT License, Copyright (c) 2026 The DynamicDecks authors. The slides are the work of the deck's author. -->
 <!-- Icons: Lucide (lucide.dev), ISC License, Copyright (c) Lucide Icons and Contributors -->
 <!-- Fonts: Bricolage Grotesque, Hanken Grotesk. SIL Open Font License 1.1 (see fonts/OFL.txt). Free to embed and share. -->
 <!-- deck:engine-css --><style id="deck-engine-css">
@@ -543,8 +543,12 @@ html.deck-presenter .deck { display: none !important; }
   --space-7: 96px;
   --space-8: 128px;
   --frame-x: 120px;
+  --frame-left: var(--frame-x);    
+  --frame-right: var(--frame-x);
   --frame-top: 88px;
   --frame-bottom: 120px;
+  --hero-bottom: 96px;             
+  --section-number-gap: auto;      
   --title-gap: 52px;
   --title-size: 72px;
   --title-weight: 650;
@@ -569,6 +573,8 @@ html.deck-presenter .deck { display: none !important; }
   --icon-xl: 140px;
   --icon-stroke: 2;
   --logo-url: none;
+  --bg-image: none;
+  --bg-panel: none;
   --logo-height: 34px;
   --logo-width: 160px;
   --dur-fast: 160ms;
@@ -643,8 +649,11 @@ html.deck-presenter .deck { display: none !important; }
 .slide {
   display: flex;
   flex-direction: column;
-  padding: var(--frame-top) var(--frame-x) var(--frame-bottom);
+  padding: var(--frame-top) var(--frame-right, var(--frame-x)) var(--frame-bottom) var(--frame-left, var(--frame-x));
   background: var(--color-bg);
+  background-image: var(--bg-image, none);
+  background-size: cover;
+  background-position: center;
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -652,7 +661,10 @@ html.deck-presenter .deck { display: none !important; }
   line-height: var(--leading-normal);
   letter-spacing: var(--tracking-normal);
 }
+.slide[data-tone]:not([data-tone="plain"]),
+.slide[data-bg="none"] { --bg-image: none; --bg-panel: none; }
 .slide:where([data-layout="title"], [data-layout="section"], [data-layout="closing"]):where(:not([data-tone])),
+.slide:where([data-bg="title"], [data-bg="section"], [data-bg="closing"]):where(:not([data-tone])),
 .slide[data-tone="inverse"] {
   --color-bg: var(--color-inverse-bg);
   --color-surface: var(--color-inverse-surface, var(--color-inverse-border));
@@ -716,8 +728,8 @@ html.deck-presenter .deck { display: none !important; }
 .slide[data-align="bottom"] .slide-body { justify-content: flex-end; }
 .slide-footer {
   position: absolute;
-  left: var(--frame-x);
-  right: var(--frame-x);
+  left: var(--frame-left, var(--frame-x));
+  right: var(--frame-right, var(--frame-x));
   bottom: var(--footer-offset);
   display: flex;
   align-items: center;
@@ -821,7 +833,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 }
 :where(.slide) li > ul:not([class]) > li { padding-left: var(--space-5); }
 :where(.slide) li > ul:not([class]) > li::before { width: var(--space-3); height: var(--stroke-thin); background: var(--color-text-subtle); }
-.slide[data-layout="title"] { justify-content: flex-end; padding-bottom: var(--space-7); }
+.slide[data-layout="title"] { justify-content: flex-end; padding-bottom: var(--hero-bottom, var(--space-7)); }
 .slide[data-layout="title"] .slide-eyebrow { font-size: var(--text-md); margin-bottom: var(--space-4); }
 .slide[data-layout="title"] .slide-title {
   max-width: none;
@@ -843,7 +855,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
   color: var(--color-text-muted);
 }
 .slide-meta > * { margin: 0; padding: 0; max-width: none; }
-.slide[data-layout="section"] { justify-content: flex-end; padding-bottom: var(--space-7); }
+.slide[data-layout="section"] { justify-content: flex-end; padding-bottom: var(--hero-bottom, var(--space-7)); }
 .slide[data-layout="section"] .slide-title {
   max-width: 18ch;
   font-size: var(--text-3xl);
@@ -853,7 +865,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 }
 .slide[data-layout="section"] .slide-subtitle { font-size: var(--text-lg); margin-top: var(--space-4); }
 .section-number {
-  margin: 0 0 auto;
+  margin: 0 0 var(--section-number-gap, auto);
   font-family: var(--font-display);
   font-size: var(--text-mega);
   font-weight: var(--weight-bold);
@@ -967,9 +979,9 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
   color: var(--color-text-muted);
 }
 .slide[data-layout="image"] > .slide-footer { right: calc(var(--image-width) + var(--space-7)); }
-.slide[data-layout="image"][data-image-side="left"] { padding-right: var(--frame-x); padding-left: calc(var(--image-width) + var(--space-7)); }
+.slide[data-layout="image"][data-image-side="left"] { padding-right: var(--frame-right, var(--frame-x)); padding-left: calc(var(--image-width) + var(--space-7)); }
 .slide[data-layout="image"][data-image-side="left"] > .slide-image { right: auto; left: 0; }
-.slide[data-layout="image"][data-image-side="left"] > .slide-footer { right: var(--frame-x); left: calc(var(--image-width) + var(--space-7)); }
+.slide[data-layout="image"][data-image-side="left"] > .slide-footer { right: var(--frame-right, var(--frame-x)); left: calc(var(--image-width) + var(--space-7)); }
 .slide[data-layout="image"] .slide-body { justify-content: center; }
 .figure { margin: 0; min-height: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; gap: var(--space-2); }
 .figure > img, .figure > svg, .figure > video { flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain; border-radius: var(--radius-md); }
