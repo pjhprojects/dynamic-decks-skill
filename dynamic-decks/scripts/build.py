@@ -43,8 +43,8 @@ class Builder:
         self.image_count = 0
 
     # ---- assets ---------------------------------------------------------
-    def embed_file(self, ref: str, base: Path, what: str) -> str:
-        """Turn a local file reference into a data URI."""
+    def embed_file(self, ref: str, base: Path, what: str, exact: bool = False) -> str:
+        """Turn a local file reference into a data URI. `exact` embeds the file's own bytes, with no recompression."""
         ref = ref.strip()
         if not ref or ref.startswith(("data:", "#", "blob:", "about:")) or ref.startswith("var("):
             return ref
@@ -62,15 +62,15 @@ class Builder:
         if not path.is_file():
             self.errors.append(f"{what} points to a file that does not exist: {ref}")
             return ref
-        uri = self._encode(path)
+        uri = self._encode(path, exact)
         self._image_cache[key] = uri
         return uri
 
-    def _encode(self, path: Path) -> str:
+    def _encode(self, path: Path, exact: bool = False) -> str:
         ext = path.suffix.lower()
         raw = path.read_bytes()
         data, mime = raw, _deck.guess_mime(path)
-        compress = self.settings.get("compress_images", True) and not self.args.no_compress
+        compress = self.settings.get("compress_images", True) and not self.args.no_compress and not exact
         if compress and ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"):
             try:
                 from PIL import Image
@@ -93,9 +93,9 @@ class Builder:
             self.image_bytes += len(data)
         return _deck.bytes_data_uri(data, mime)
 
-    def embed_css_urls(self, css: str, base: Path, what: str) -> str:
+    def embed_css_urls(self, css: str, base: Path, what: str, exact: bool = False) -> str:
         def repl(m):
-            new = self.embed_file(m.group(2), base, what)
+            new = self.embed_file(m.group(2), base, what, exact)
             # leave untouched anything that was not embedded, such as url(#marker);
             # base64 data URIs need no quotes, which keeps them safe inside attributes
             return m.group(0) if new == m.group(2).strip() else "url(" + new + ")"
@@ -205,7 +205,8 @@ class Builder:
         body_css = re.sub(r"@font-face\s*\{.*?\}", "", css, flags=re.S)
         body_css = _deck.strip_css_comments(body_css)
         body_css = self.prune_backgrounds(body_css, body, theme_dir.name)
-        body_css = self.embed_css_urls(body_css, theme_dir, "The theme")
+        # a theme's pictures were sized and saved with care when the theme was made: they go in as they are
+        body_css = self.embed_css_urls(body_css, theme_dir, "The theme", exact=True)
         body_css = re.sub(r"\n\s*\n+", "\n", body_css).strip()
 
         # Logo

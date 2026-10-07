@@ -231,9 +231,9 @@ t.ok("LibreOffice draws artwork made of shapes", proc.returncode == 0 and bgs.ge
      and (shapes / "backgrounds" / "content.webp").is_file(), proc.stdout[-400:] + proc.stderr[-300:])
 if (shapes / "backgrounds" / "content.webp").is_file():
     pic = Image.open(shapes / "backgrounds" / "content.webp").convert("RGB")
-    band, paper, strip = pic.getpixel((60, 500)), pic.getpixel((900, 500)), pic.getpixel((900, 1070))
+    band, paper, strip = pic.getpixel((120, 1000)), pic.getpixel((1800, 1000)), pic.getpixel((1800, 2140))
     t.ok("the picture has the template's band, strip and paper", band[0] > 170 and band[1] < 60 and min(paper) > 240 and max(strip) < 60, (band, paper, strip))
-    t.ok("it is 1920 x 1080", pic.size == (1920, 1080), pic.size)
+    t.ok("it is drawn at twice the stage size", pic.size == (3840, 2160), pic.size)
 t.ok("the text area starts clear of the band", px(css, "--frame-left") >= 190, px(css, "--frame-left"))
 t.ok("the logo is part of the picture, not placed twice", not (shapes / "logo.png").exists() and meta.get("logo") is None)
 t.ok("the title slide is drawn with its own shapes", bgs.get("title", {}).get("drawn_by_libreoffice") is True and (shapes / "backgrounds" / "title.webp").is_file())
@@ -241,11 +241,14 @@ t.ok("a section number sits on its title on a picture", "--section-number-gap" i
 
 proc, drawn, css, meta = make("template-photo.pptx", "photo-drawn", WITH_LO)
 t.ok("a picture background is drawn too", meta.get("backgrounds", {}).get("content", {}).get("drawn_by_libreoffice") is True and px(css, "--frame-right") >= 700)
-proc, small, css, meta = make("template.pptx", "flat-drawn", WITH_LO)
-t.ok("a flat template drawn by LibreOffice is still a flat theme", "backgrounds" not in meta and meta.get("variants") == ["light", "dark"] and (small / "logo.png").is_file(),
-     proc.stdout[-300:])
+proc, small, css, meta = make("template.pptx", "logo-drawn", WITH_LO)
+t.ok("a template whose only artwork is a logo keeps it in place, as a picture", meta.get("backgrounds", {}).get("content", {}).get("drawn_by_libreoffice") is True
+     and not (small / "logo.png").exists() and meta.get("variants") == ["light"], proc.stdout[-300:])
+proc, never, css, meta = make("template.pptx", "logo-flat", WITH_LO, "--backgrounds", "never")
+t.ok("--backgrounds never still gives the flat theme with its own logo and a dark variant", "backgrounds" not in meta
+     and meta.get("variants") == ["light", "dark"] and (never / "logo.png").is_file(), proc.stdout[-300:])
 proc, kept, css, meta = make("template.pptx", "flat-kept", WITH_LO, "--backgrounds", "always")
-t.ok("--backgrounds always is accepted", proc.returncode == 0, proc.stdout[-300:] + proc.stderr[-300:])
+t.ok("--backgrounds always is still accepted", proc.returncode == 0, proc.stdout[-300:] + proc.stderr[-300:])
 
 proc, brand, css, meta = make("template-brand.pptx", "brand-drawn", WITH_LO)
 bgs = meta.get("backgrounds", {})
@@ -269,7 +272,7 @@ with sync_playwright() as p:
     side_slide, dark_slide, plain_slide = (page.evaluate(STATE, name) for name in ("s-none", "s-optin", "s-content"))
     bg_color = page.evaluate("getComputedStyle(document.getElementById('s-optin')).backgroundColor")
     t.ok('data-bg="sidebar" shows that layout\'s picture and keeps text off the band', side_slide["image"].startswith("url(")
-         and side_slide["right"] <= 0.72 * 1920 + 2 and plain_slide["image"] == "none", (side_slide["picture"][:30], side_slide["right"]))
+         and side_slide["right"] <= 0.72 * 1920 + 2 and plain_slide["image"] != side_slide["image"], (side_slide["picture"][:30], side_slide["right"]))
     t.ok('data-bg="dark-content" gives a dark slide with light text', bg_color == "rgb(27, 27, 27)" and dark_slide["lightText"], bg_color)
     browser.close()
 proc = run("render.py", more_deck, "--out", OUT / "bg-more-render", "--json")

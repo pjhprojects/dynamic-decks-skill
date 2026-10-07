@@ -193,16 +193,29 @@ one picture per kind of slide: `content`, `title`, `section`, `closing`.
 How the picture is made:
 
 - **With LibreOffice** (`soffice` on the PATH, or `DYNAMIC_DECKS_SOFFICE=/path/to/soffice`):
-  an empty slide of each kind is drawn at 1920 x 1080. Everything the template
-  puts on that kind of slide is in the picture, the logo included, so the theme
-  does not place the logo a second time.
+  an empty slide of each kind is drawn at 3840 x 2160, twice the stage, so a
+  hairline rule and any lettering in the artwork stay sharp full screen and on
+  dense displays. Everything the template puts on that kind of slide is in the
+  picture, the logo included and where the template has it, so the theme does
+  not place the logo a second time.
 - **Without it**: a background that is one picture is taken straight from the
   file, and a plain gradient is written as CSS. Artwork made of shapes cannot be
   read this way and is left out. The report says so; install LibreOffice and run
   the command again for an exact copy.
-- A flat background stays a flat color. Small marks (under 2.5% of the slide)
-  are left out and reported; `--backgrounds always` keeps them, and
-  `--backgrounds never` turns pictures off altogether.
+- A flat background stays a flat color. Anything drawn on it, however small (a
+  logo, a thin rule under the title), makes it a picture, so nothing the
+  template shows is dropped. `--backgrounds never` turns pictures off
+  altogether: the theme is then flat, with a dark variant and the logo in the
+  footer, as for a template with no artwork.
+- Line artwork, flat shapes and lettering are stored exactly, pixel for pixel
+  (a few KB, since such pictures compress well). Only a photograph is
+  compressed, lightly, at up to 2560 px wide. The build puts a theme's
+  pictures into a deck as they are, with no second compression.
+- Text that is part of the artwork ("Confidential", a strapline) becomes part
+  of the picture. LibreOffice sets it with the fonts on the machine where the
+  theme is made; when the template's font is not installed there, the report
+  says which, and the lettering will be in a stand-in. Install the font and
+  make the theme again.
 
 Each picture is then **measured once**, so nobody has to look at it again when
 writing slides. The result is in `theme.json` under `backgrounds`:
@@ -210,12 +223,37 @@ writing slides. The result is in `theme.json` under `backgrounds`:
 | Field | Meaning |
 |---|---|
 | `picture` | The file in the theme's `backgrounds/` folder, or the CSS gradient |
-| `safe` | The text area as `[x, y, width, height]` on the 1920 x 1080 stage: where the template's own title and text boxes sit, pulled in from artwork along the edges |
+| `safe` | The text area as `[x, y, width, height]` on the 1920 x 1080 stage: what the template's own title and text boxes cover, less the inset PowerPoint keeps inside a box |
+| `title_area`, `body_area` | On content slides, the title box and the text box apart. `title_area` has its `box`, the `anchor` (where the title sits in it), the title `text` color, and, when the template draws something under the title, the `room` a title has in px and the `lines` that fit |
 | `ink`, `text` | Dark or light text, and the exact color, chosen from the pixels under the text area |
 | `calm` | `true` when text can sit straight on the picture; `false` when it is too busy |
 | `panel` | For a busy picture: the color and strength of the panel the theme puts behind the text |
 | `description` | One sentence on where the artwork is, for composing a slide by hand |
 | `from`, `drawn_by_libreoffice` | The template layout it came from, and how it was read |
+
+**The template's text boxes are the authority on where text goes.** Text is put
+where the template puts text, not where a reading of the picture suggests
+there is room: a title box that lies on a band or a tint is meant to, and the
+title stays there in a color that reads on it. The one correction is for a box
+whose edge runs a little way under artwork along the slide's side (a layout
+left with default boxes): that edge is pulled in, and the report says so. A
+layout with no positioned text box at all gets the built-in margins. Only a
+picture supplied by hand, which comes with no boxes, has its empty part looked for.
+
+On content slides the title box and the text box are kept apart:
+
+- The title gets an area as tall as the template's title box (`--title-min`)
+  and sits in it top, middle or bottom as the template has it
+  (`--title-anchor`). An eyebrow shares that area.
+- The body starts where the template's text box starts (`--title-gap`), so a
+  rule or the edge of a band between the two falls between title and body.
+- When the template draws something under the title, `--title-max` is how
+  tall the eyebrow and title together may be before they reach it, and
+  `render.py` reports a title that runs into it. The report says how many
+  lines fit; write titles to that length in such a theme. When nothing is
+  drawn there, a longer title just pushes the body down.
+- A title on a band gets its own color, in a rule that applies only to slides
+  showing that background, so flat slides keep theirs.
 
 The theme turns those into rules, so the ordinary layouts need nothing from you:
 
@@ -295,10 +333,11 @@ python scripts/add_theme.py new --name acme --accent "#E4002B" \
 `"backgrounds": {"content": "bg.png"}`). A supplied picture has no text boxes
 to go by, so its largest empty part becomes the text area; a picture with no
 empty part gets the usual margins and a panel. Pictures that are not 16:9 are
-cropped to fit.
+cropped to fit. A supplied picture is kept at its own size up to 3840 px wide;
+give one at least 1920 px wide, and 3840 if it has fine lines or lettering.
 
 Pictures are embedded in every deck built with the theme. The report gives the
-size they add, typically 50 to 300 KB.
+size they add: a few KB for line artwork, 100 to 400 KB for a photograph.
 
 ## Adding a theme from a brand guide or description
 

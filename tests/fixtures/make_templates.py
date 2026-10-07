@@ -29,6 +29,13 @@ Needs python-pptx and Pillow. Every picture is drawn from a fixed seed.
                          Sidebar) among others that look like the content one.
   template-masters.pptx  two slide masters, Corporate Light and Corporate Dark.
                          One slide uses the light one and three the dark one.
+  template-rule.pptx     a thin rule under the title, with the title box above
+                         it (anchored to its bottom) and the text box below;
+                         a bar along the bottom with small text on it, and a
+                         line of text top right. Fine detail that has to stay
+                         sharp, and a title that has to stay above the rule.
+  template-band.pptx     a dark band across the top with the title box on it,
+                         in white, and the text box on the white below.
 """
 from __future__ import annotations
 
@@ -379,10 +386,63 @@ def masters() -> None:
     prs.save(path)
 
 
+def add_text(obj, text: str, x: float, y: float, w: float, h: float, size: int, color: str, align: str = "l") -> None:
+    """A fixed line of text on a master or layout: part of the artwork, not a placeholder."""
+    sp = fragment(
+        f'<p:sp><p:nvSpPr><p:cNvPr id="{next_id(obj)}" name="Text"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>'
+        f'<p:spPr><a:xfrm><a:off x="{int(x * W)}" y="{int(y * H)}"/><a:ext cx="{int(w * W)}" cy="{int(h * H)}"/></a:xfrm>'
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>'
+        f'<p:txBody><a:bodyPr wrap="none" anchor="ctr"/><a:lstStyle/><a:p><a:pPr algn="{align}"/>'
+        f'<a:r><a:rPr lang="en-US" sz="{size * 100}"><a:solidFill><a:srgbClr val="{color}"/></a:solidFill></a:rPr>'
+        f'<a:t>{text}</a:t></a:r></a:p></p:txBody></p:sp>')
+    tree(obj).append(sp)
+
+
+def anchor(obj, kinds: tuple, where: str) -> None:
+    """Set where a placeholder's text sits in its box: t, ctr or b."""
+    body = placeholder(obj, kinds[0]).find(f"{{{P}}}txBody/{{{A}}}bodyPr")
+    body.set("anchor", where)
+
+
+def rule() -> None:
+    prs, master, layouts = blank()
+    bg_solid(master, "FFFFFF")
+    paragraph_style(master, "titleStyle", 1).set("algn", "l")
+    paragraph_style(master, "titleStyle", 1).find(f"{{{A}}}defRPr").set("sz", "3200")
+    for obj in (master, layouts["obj"]):
+        place(obj, ("title",), 0.06, 0.07, 0.7, 0.13)
+        place(obj, ("body", None), 0.06, 0.25, 0.88, 0.6)
+    anchor(master, ("title",), "b")
+    add_shape(master, "rect", 0.06, 0.212, 0.88, 0.004, "C8102E")          # the rule under the title
+    add_shape(master, "rect", 0, 0.94, 1, 0.06, "1B1B1B")                  # a bar along the bottom
+    add_text(master, "Northwind Trading  |  Confidential", 0.06, 0.945, 0.5, 0.05, 11, "FFFFFF")
+    add_text(master, "Quarterly Business Review", 0.6, 0.075, 0.34, 0.05, 12, "6B6B6B", "r")
+    prs.save(HERE / "template-rule.pptx")
+
+
+def band() -> None:
+    prs, master, layouts = blank()
+    bg_solid(master, "FFFFFF")
+    style = paragraph_style(master, "titleStyle", 1)
+    style.set("algn", "l")
+    run = style.find(f"{{{A}}}defRPr")
+    run.set("sz", "3200")
+    for old in run.findall(f"{{{A}}}solidFill"):
+        run.remove(old)
+    run.insert(0, fragment('<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>'))
+    for obj in (master, layouts["obj"]):
+        place(obj, ("title",), 0.05, 0.03, 0.9, 0.14)
+        place(obj, ("body", None), 0.05, 0.24, 0.9, 0.62)
+    anchor(master, ("title",), "ctr")
+    add_shape(master, "rect", 0, 0, 1, 0.2, "0B2545")                      # the band the title sits on
+    add_shape(master, "rect", 0, 0.2, 1, 0.008, "F2A541")
+    prs.save(HERE / "template-band.pptx")
+
+
 def main() -> None:
     import sys
     wanted = set(sys.argv[1:])
-    made = {"photo": photo, "shapes": shapes, "busy": busy, "brand": brand, "masters": masters}
+    made = {"photo": photo, "shapes": shapes, "busy": busy, "brand": brand, "masters": masters, "rule": rule, "band": band}
     unknown = wanted - set(made)
     if unknown:
         sys.exit(f"no such template: {', '.join(sorted(unknown))} (there are: {', '.join(made)})")

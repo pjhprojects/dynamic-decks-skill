@@ -27,7 +27,7 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 COPYRIGHT = "Copyright (c) 2026 The DynamicDecks authors"
 LICENSE_NAME = "MIT License"
 SKILL_DIR = Path(__file__).resolve().parent.parent
