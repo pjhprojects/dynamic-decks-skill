@@ -123,7 +123,11 @@ That last row is the trade. If colleagues need to open the file and retype a num
 
 ## Install
 
-Download `dynamic-decks.zip` (or `dynamic-decks.skill`, the same archive) from the [latest release](../../releases/latest), or build it yourself with `python tools/package.py`. The agent needs to be able to run code and write files, since the skill's scripts are Python.
+**Download the skill: [dynamic-decks.zip](https://github.com/pjhprojects/dynamic-decks-skill/releases/latest/download/dynamic-decks.zip).** That one file is what you install. The same archive is on the [latest release](https://github.com/pjhprojects/dynamic-decks-skill/releases/latest) as `dynamic-decks.skill` too.
+
+> **Do not use GitHub's green "Code > Download ZIP" button.** That downloads this whole project, with the skill one folder down, and Claude rejects it with "SKILL.md file must be in the top-level folder". If you already have the project, the skill is the `dynamic-decks` folder inside it: zip that folder, or run `python tools/package.py`.
+
+The agent needs to be able to run code and write files, since the skill's scripts are Python.
 
 **Claude app** (tested). Code execution has to be enabled. Go to Customize > Skills, click "+", then "+ Create skill", choose "Upload a skill", and upload the ZIP. See [Use skills in Claude](https://support.claude.com/en/articles/12512180-use-skills-in-claude) for the current steps.
 
