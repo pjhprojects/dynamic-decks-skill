@@ -96,3 +96,82 @@ def describe_masters(masters: list[dict]) -> str:
         slides = f"{m['slides']} slide{'' if m['slides'] == 1 else 's'}"
         return f"{i} \"{m['name']}\" ({m['layouts']} layouts, {slides})"
     return ", ".join(one(i, m) for i, m in enumerate(masters, 1))
+
+
+# --------------------------------------------------------------------------
+# Placeholders: a layout's own, with the master's as the fallback
+# --------------------------------------------------------------------------
+TITLE_TYPES = ("title", "ctrTitle")
+BODY_TYPES = (None, "body", "obj", "subTitle")
+
+
+def placeholders(root, types: tuple) -> list:
+    """The placeholder shapes of these types on a master or layout, in document order."""
+    tree = root.find("p:cSld/p:spTree", NS) if root is not None else None
+    out = []
+    for sp in (tree.findall("p:sp", NS) if tree is not None else []):
+        ph = sp.find("p:nvSpPr/p:nvPr/p:ph", NS)
+        if ph is not None and ph.get("type") in types:
+            out.append(sp)
+    return out
+
+
+def box_of(sp, size: tuple[int, int]) -> tuple | None:
+    """A shape's box in stage px as (x, y, w, h), or None when it has no position of its own."""
+    off, ext = sp.find("p:spPr/a:xfrm/a:off", NS), sp.find("p:spPr/a:xfrm/a:ext", NS)
+    if off is None or ext is None:
+        return None
+    cx, cy = size
+    return (int(off.get("x")) * 1920 / cx, int(off.get("y")) * 1080 / cy,
+            int(ext.get("cx")) * 1920 / cx, int(ext.get("cy")) * 1080 / cy)
+
+
+def _level(sp, level: int = 1):
+    """<a:lvlNpPr> from a placeholder's own list style, or None."""
+    return sp.find(f"p:txBody/a:lstStyle/a:lvl{level}pPr", NS) if sp is not None else None
+
+
+def _first(*values):
+    return next((v for v in values if v is not None), None)
+
+
+# --------------------------------------------------------------------------
+# Titles: alignment, and where the text sits on title and section slides
+# --------------------------------------------------------------------------
+ALIGN = {"l": "start", "just": "start", "dist": "start", "ctr": "center", "r": "end"}
+
+
+def title_align(master, layout=None) -> str:
+    """start, center or end: how this kind of slide aligns its title.
+
+    The layout's title box decides, then the master's title box, then the
+    master's title style. PowerPoint's own default master centers titles.
+    """
+    found = None
+    for root in (layout, master):
+        for sp in placeholders(root, TITLE_TYPES):
+            lvl = _level(sp)
+            para = sp.find("p:txBody/a:p/a:pPr", NS)
+            found = _first(lvl.get("algn") if lvl is not None else None, para.get("algn") if para is not None else None)
+            if found:
+                break
+        if found:
+            break
+    if not found and master is not None:
+        style = master.find("p:txStyles/p:titleStyle/a:lvl1pPr", NS)
+        found = style.get("algn") if style is not None else None
+    return ALIGN.get(found or "l", "start")
+
+
+def hero_place(master, layout, size: tuple[int, int]) -> str | None:
+    """Where a title or section slide's text sits top to bottom: flex-start, center or flex-end.
+
+    Goes by the middle of the layout's title and text boxes together. None
+    when the layout places none of them itself.
+    """
+    boxes = [b for b in (box_of(sp, size) for sp in placeholders(layout, TITLE_TYPES + BODY_TYPES)) if b]
+    if not boxes:
+        return None
+    top, bottom = min(b[1] for b in boxes), max(b[1] + b[3] for b in boxes)
+    middle = (top + bottom) / 2 / 1080
+    return "center" if 0.38 <= middle <= 0.62 else ("flex-end" if middle > 0.62 else "flex-start")

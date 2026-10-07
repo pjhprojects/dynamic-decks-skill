@@ -179,6 +179,8 @@
   --title-weight: 650;
   --title-color: var(--color-text);
   --title-measure: 30ch;
+  --title-align: start;            /* start, center or end: the eyebrow, title and subtitle together */
+  --hero-justify: flex-end;        /* where the text block sits on title and section slides: flex-start, center or flex-end */
   --eyebrow-color: var(--color-accent);
   --footer-offset: 44px;
   --footer-color: var(--color-text-subtle);

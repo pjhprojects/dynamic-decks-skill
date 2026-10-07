@@ -554,6 +554,8 @@ html.deck-presenter .deck { display: none !important; }
   --title-weight: 650;
   --title-color: var(--color-text);
   --title-measure: 30ch;
+  --title-align: start;            
+  --hero-justify: flex-end;        
   --eyebrow-color: var(--color-accent);
   --footer-offset: 44px;
   --footer-color: var(--color-text-subtle);
@@ -713,6 +715,13 @@ html.deck-presenter .deck { display: none !important; }
   color: var(--color-text-muted);
   text-wrap: pretty;
 }
+.slide-eyebrow, .slide-title, .slide-subtitle, .section-number {
+  text-align: var(--title-align, start);
+  align-self: var(--title-align, start);
+}
+.slide:not(:has(> .slide-title)) > .slide-eyebrow { text-align: start; align-self: start; }   
+.slide-meta { justify-content: var(--title-align, start); }
+.slide[data-layout="closing"] > .slide-body { align-self: var(--title-align, start); }
 .slide-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -833,7 +842,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 }
 :where(.slide) li > ul:not([class]) > li { padding-left: var(--space-5); }
 :where(.slide) li > ul:not([class]) > li::before { width: var(--space-3); height: var(--stroke-thin); background: var(--color-text-subtle); }
-.slide[data-layout="title"] { justify-content: flex-end; padding-bottom: var(--hero-bottom, var(--space-7)); }
+.slide[data-layout="title"] { justify-content: var(--hero-justify, flex-end); padding-bottom: var(--hero-bottom, var(--space-7)); }
 .slide[data-layout="title"] .slide-eyebrow { font-size: var(--text-md); margin-bottom: var(--space-4); }
 .slide[data-layout="title"] .slide-title {
   max-width: none;
@@ -855,7 +864,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
   color: var(--color-text-muted);
 }
 .slide-meta > * { margin: 0; padding: 0; max-width: none; }
-.slide[data-layout="section"] { justify-content: flex-end; padding-bottom: var(--hero-bottom, var(--space-7)); }
+.slide[data-layout="section"] { justify-content: var(--hero-justify, flex-end); padding-bottom: var(--hero-bottom, var(--space-7)); }
 .slide[data-layout="section"] .slide-title {
   max-width: 18ch;
   font-size: var(--text-3xl);

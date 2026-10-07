@@ -280,6 +280,24 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
         spec["logo"] = {"base": str(logo)}
     if len(masters) > 1:
         spec["master"] = chosen["name"]
+
+    # What the master and its layouts say about each kind of slide (see _master.py)
+    layout_parts = _backgrounds.find_layouts(z, master_part)
+    layout_xml = {kind: ET.fromstring(z.read(entry["part"])) for kind, entry in layout_parts.items()}
+    per_kind: dict[str, dict] = {}
+    for kind in ("content", "title", "section", "closing"):
+        if kind != "content" and kind not in layout_xml:
+            continue
+        per_kind[kind] = {"title_align": _master.title_align(master, layout_xml.get(kind))}
+        if kind in ("title", "section"):
+            place = _master.hero_place(master, layout_xml[kind], (cx, cy))
+            if place:
+                per_kind[kind]["place"] = place
+    spec["layouts"] = per_kind
+    aligns = {kind: v["title_align"] for kind, v in per_kind.items()}
+    if set(aligns.values()) != {"start"}:
+        words = {"start": "left", "center": "centered", "end": "right"}
+        notes.append("title alignment follows the template: " + ", ".join(f"{kind} slides {words[a]}" for kind, a in aligns.items()))
     if kinds:
         spec["backgrounds"] = kinds
         hero = kinds.get("title", {})
@@ -692,6 +710,39 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         tokens["--weight-display"] = str(frame["title_weight"])
     tokens.update(SHAPES.get(spec.get("shape") or "soft", SHAPES["soft"]))
 
+    # What each kind of slide takes from its layout in the template: the content kind sets tokens on :root,
+    # the others get a rule each in Decor.
+    aligned = {"left": "start", "centre": "center", "right": "end", "start": "start", "center": "center", "end": "end"}
+    per_kind = {k: dict(v) for k, v in (spec.get("layouts") or {}).items() if isinstance(v, dict)}
+    asked = getattr(args, "title_align", None) or frame.get("title_align")
+    if asked:                                     # one alignment for every kind of slide
+        for kind in ("content", "title", "section", "closing"):
+            per_kind.setdefault(kind, {})["title_align"] = asked
+    layout_rules: dict[str, dict[str, str]] = {}
+    for kind, values in per_kind.items():
+        decl: dict[str, str] = {}
+        align = aligned.get(str(values.get("title_align") or "").lower())
+        if values.get("title_align") and not align:
+            notes.append(f"title alignment '{values['title_align']}' is not left, center or right; it was left as it is")
+        if align:
+            decl["--title-align"] = align
+        if values.get("place") in ("flex-start", "center", "flex-end") and kind in ("title", "section"):
+            decl["--hero-justify"] = values["place"]
+            if kind == "section" and values["place"] != "flex-end":
+                decl["--section-number-gap"] = "var(--space-4)"   # nothing to pin the number against
+        if kind == "content":
+            tokens.update(decl)
+        elif decl:
+            layout_rules[kind] = decl
+    content_align = tokens.get("--title-align", "start")
+    for kind in list(layout_rules):
+        if layout_rules[kind].get("--title-align") == content_align:
+            del layout_rules[kind]["--title-align"]
+        if layout_rules[kind].get("--hero-justify") == "flex-end":
+            del layout_rules[kind]["--hero-justify"]
+        if not layout_rules[kind]:
+            del layout_rules[kind]
+
     # Background pictures: the content one goes on :root, the others get a rule each in Decor
     saved: dict[str, str] = {}
     bg_meta: dict[str, dict] = {}
@@ -851,6 +902,10 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
     if len(blocks) > 1:
         css += f"\n/* ---- 3. Variant: {other} {'-' * 52} */\n" + blocks[1] + "\n"
     css += "\n/* ---- 4. Decor ----------------------------------------------------------- */\n/* Optional extra CSS for the frame: rules, marks, logo placement. */\n"
+    if layout_rules:
+        css += ("/* What the template's layouts set for each kind of slide. */\n"
+                + "".join(f'.slide[data-layout="{kind}"] {{ ' + " ".join(f"{k}: {v};" for k, v in decl.items()) + " }\n"
+                          for kind, decl in layout_rules.items()))
     if any(entry.get("panel") for entry in list(kinds.values()) + [e for e in heroes.values() if e] if "flat" not in entry):
         css += PANEL_CSS
     if hero_css:
@@ -1072,6 +1127,8 @@ def main() -> None:
         p.add_argument("--logo", help="logo file (.svg or .png)")
         p.add_argument("--logo-dark", help="logo file for dark slides")
         p.add_argument("--shape", choices=sorted(SHAPES), help="corner style (default soft)")
+        p.add_argument("--title-align", choices=("left", "center", "right"),
+                       help="align titles on every kind of slide (from-pptx: overrides what the template says)")
         p.add_argument("--icons", help="icon set this theme should use")
         p.add_argument("--single-variant", action="store_true", help="do not derive the second (dark or light) variant")
         p.add_argument("--background", action="append", metavar="KIND=FILE",

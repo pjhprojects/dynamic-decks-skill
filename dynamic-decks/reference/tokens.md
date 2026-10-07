@@ -58,7 +58,12 @@ padding and offsets so custom slides share the deck's rhythm.
 
 `--frame-x`, `--frame-top`, `--frame-bottom` are the slide margins;
 `--title-gap` the space under the title; `--title-size`, `--title-weight`,
-`--title-color`, `--title-measure` shape the slide title.
+`--title-color`, `--title-measure` shape the slide title. `--title-align` is
+`start`, `center` or `end`: it aligns the eyebrow, title and subtitle together,
+and works in both `text-align` and `align-self`, so a custom heading can follow
+the theme with `text-align: var(--title-align)`. `--hero-justify`
+(`flex-start`, `center`, `flex-end`) is where the text block sits top to
+bottom on title and section slides.
 
 `--frame-left` and `--frame-right` are the side margins on their own. They
 equal `--frame-x` unless the theme's background has artwork down one side, so

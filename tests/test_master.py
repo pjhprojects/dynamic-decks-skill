@@ -11,7 +11,9 @@ import json
 import re
 import shutil
 
-from _common import FIXTURES, OUT, Checks, run
+from playwright.sync_api import sync_playwright
+
+from _common import FIXTURES, OUT, STARTER_SRC, Checks, build, launch, run
 
 t = Checks("Slide master")
 
@@ -56,5 +58,64 @@ t.ok("a name that fits two masters asks for the number", proc.returncode != 0 an
 proc, folder, css, meta = make("template-brand.pptx", "brand")
 t.ok("a file with one master says nothing about masters", proc.returncode == 0 and "slide masters" not in proc.stdout and "master" not in meta,
      proc.stdout[-300:] + proc.stderr[-300:])
+
+def rule(css: str, kind: str) -> str:
+    """The one-line Decor rule a kind of slide gets for what its layout sets."""
+    m = re.search(r'(?m)^\.slide\[data-layout="' + kind + r'"\] \{ ([^}]*)\}', css)
+    return m.group(1) if m else ""
+
+
+def open_deck(p, deck):
+    browser = launch(p)
+    page = browser.new_page(viewport={"width": 1920, "height": 1080})
+    page.goto(deck.as_uri())
+    page.wait_for_function("document.documentElement.classList.contains('deck-ready') && !!window.Deck")
+    page.evaluate("Deck.rest(true)")
+    return browser, page
+
+
+# ---- title alignment -------------------------------------------------------------
+proc, brand, css, meta = make("template-brand.pptx", "brand-align")
+t.ok("content titles follow the master's title style", token(css, "--title-align") == "start", token(css, "--title-align"))
+t.ok("the title slide follows its own layout", "--title-align: center" in rule(css, "title"), rule(css, "title"))
+t.ok("the title slide's text sits where its boxes are, top to bottom", "--hero-justify: center" in rule(css, "title"))
+t.ok("a kind that matches the content slides gets no rule", rule(css, "section") == "", rule(css, "section"))
+t.ok("the report says how titles align", "content slides left, title slides centered" in proc.stdout)
+proc, flat, css, meta = make("template.pptx", "default-master")
+t.ok("PowerPoint's default master centers titles, and the theme follows", token(css, "--title-align") == "center"
+     and "--title-align: start" in rule(css, "section"), token(css, "--title-align") + " / " + rule(css, "section"))
+proc, forced, css, meta = make("template.pptx", "forced-left", "--title-align", "left")
+t.ok("--title-align overrides the template for every kind of slide", token(css, "--title-align") == "start" and "--title-align" not in rule(css, "section"))
+proc = run("add_theme.py", "new", "--name", "centered", "--accent", "#2B6CF0", "--title-align", "center", env=ENV)
+css = (lib / "themes" / "centered" / "theme.css").read_text(encoding="utf-8")
+t.ok("a theme from brand values can ask for an alignment", proc.returncode == 0 and token(css, "--title-align") == "center")
+
+ALIGNED = """() => Deck.slides.map((s) => {
+  const title = s.querySelector(':scope > .slide-title'), eyebrow = s.querySelector(':scope > .slide-eyebrow');
+  const r = title ? title.getBoundingClientRect() : null, sr = s.getBoundingClientRect();
+  return { layout: s.dataset.layout || '', align: title ? getComputedStyle(title).textAlign : '',
+           mid: r ? Math.round((r.left + r.right) / 2 - sr.left) : 0, middle: r ? Math.round((r.top + r.bottom) / 2 - sr.top) : 0,
+           eyebrow: eyebrow ? getComputedStyle(eyebrow).textAlign : '' };
+})"""
+deck = OUT / "master-brand.html"
+build(STARTER_SRC, deck, "--theme", "brand-align", env=ENV)
+centered = OUT / "master-centered.html"
+build(STARTER_SRC, centered, "--theme", "default-master", env=ENV)
+with sync_playwright() as p:
+    browser, page = open_deck(p, deck)
+    slides = page.evaluate(ALIGNED)
+    first, bullets = slides[0], next(s for s in slides if s["layout"] == "bullets")
+    t.ok("in the deck, the title slide is centered left to right and top to bottom",
+         first["align"] == "center" and abs(first["mid"] - 960) < 12 and 380 < first["middle"] < 640, first)
+    t.ok("and content titles stay left", bullets["align"] == "start" and bullets["mid"] < 900, bullets)
+    browser.close()
+    browser, page = open_deck(p, centered)
+    slides = page.evaluate(ALIGNED)
+    bullets, number = next(s for s in slides if s["layout"] == "bullets"), next(s for s in slides if s["layout"] == "big-number")
+    section = next(s for s in slides if s["layout"] == "section")
+    t.ok("a centered master centers content titles", bullets["align"] == "center" and abs(bullets["mid"] - 960) < 12, bullets)
+    t.ok("an eyebrow with no title under it stays with its content", number["eyebrow"] == "start", number)
+    t.ok("a layout that sets its own alignment keeps it", section["align"] == "start" and section["mid"] < 900, section)
+    browser.close()
 
 t.done()

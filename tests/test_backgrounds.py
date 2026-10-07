@@ -130,7 +130,8 @@ STATE = """(id) => {
   const title = s.querySelector('.slide-title');
   const light = (c) => { const m = c.match(/[\\d.]+/g).map(Number); return (m[0] * 0.2126 + m[1] * 0.7152 + m[2] * 0.0722) > 140; };
   return { image: cs.backgroundImage, picture: cs.backgroundImage.slice(0, 96), panel: panel.backgroundColor,
-           lightText: light(getComputedStyle(title).color), left: title.getBoundingClientRect().left, right: title.getBoundingClientRect().right };
+           lightText: light(getComputedStyle(title).color), left: title.getBoundingClientRect().left, right: title.getBoundingClientRect().right,
+           pad: cs.paddingLeft + ' ' + cs.paddingRight };
 }"""
 
 with sync_playwright() as p:
@@ -148,7 +149,8 @@ with sync_playwright() as p:
     t.ok("a slide with a tone of its own shows no picture", s["s-tone"]["image"] == "none")
     t.ok('data-bg="none" shows no picture', s["s-none"]["image"] == "none")
     t.ok('data-bg="title" puts a content slide on the title picture, with its colors and margins',
-         s["s-optin"]["image"] == s["s-title"]["image"] and s["s-optin"]["lightText"] and abs(s["s-optin"]["left"] - s["s-title"]["left"]) < 2, s["s-optin"])
+         s["s-optin"]["image"] == s["s-title"]["image"] and s["s-optin"]["lightText"] and s["s-optin"]["pad"] == s["s-title"]["pad"],
+         (s["s-optin"]["pad"], s["s-title"]["pad"]))
     t.ok("a calm picture has no panel", s["s-content"]["panel"] in ("rgba(0, 0, 0, 0)", "transparent"), s["s-content"]["panel"])
 
     page.goto(busy_deck.as_uri())

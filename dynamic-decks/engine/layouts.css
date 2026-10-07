@@ -102,6 +102,16 @@
   color: var(--color-text-muted);
   text-wrap: pretty;
 }
+/* Where titles align: start, center or end (--title-align, from the theme).
+   One value sets the text's alignment and where a block narrower than the
+   slide sits, so the eyebrow, title and subtitle move together. */
+.slide-eyebrow, .slide-title, .slide-subtitle, .section-number {
+  text-align: var(--title-align, start);
+  align-self: var(--title-align, start);
+}
+.slide:not(:has(> .slide-title)) > .slide-eyebrow { text-align: start; align-self: start; }   /* a label over a body, not over a title */
+.slide-meta { justify-content: var(--title-align, start); }
+.slide[data-layout="closing"] > .slide-body { align-self: var(--title-align, start); }
 .slide-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -232,7 +242,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 /* ---- 3. Layouts --------------------------------------------------------- */
 
 /* title */
-.slide[data-layout="title"] { justify-content: flex-end; padding-bottom: var(--hero-bottom, var(--space-7)); }
+.slide[data-layout="title"] { justify-content: var(--hero-justify, flex-end); padding-bottom: var(--hero-bottom, var(--space-7)); }
 .slide[data-layout="title"] .slide-eyebrow { font-size: var(--text-md); margin-bottom: var(--space-4); }
 .slide[data-layout="title"] .slide-title {
   max-width: none;
@@ -256,7 +266,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 .slide-meta > * { margin: 0; padding: 0; max-width: none; }
 
 /* section */
-.slide[data-layout="section"] { justify-content: flex-end; padding-bottom: var(--hero-bottom, var(--space-7)); }
+.slide[data-layout="section"] { justify-content: var(--hero-justify, flex-end); padding-bottom: var(--hero-bottom, var(--space-7)); }
 .slide[data-layout="section"] .slide-title {
   max-width: 18ch;
   font-size: var(--text-3xl);

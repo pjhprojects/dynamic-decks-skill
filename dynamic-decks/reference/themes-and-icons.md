@@ -114,6 +114,17 @@ python scripts/add_theme.py from-pptx Template.pptx --name acme-dark --master "C
 A wrong master is the usual reason a new theme has colors or a background the
 user does not recognize, so read that line of the report first.
 
+**Title alignment.** Whether titles sit left, centered or right is read for
+each kind of slide: from the layout's title box, then the master's, then the
+master's title style. PowerPoint's own default master centers titles, so many
+templates do. It becomes `--title-align` (`start`, `center` or `end`), which
+moves the eyebrow, title and subtitle together; body content stays as each
+layout arranges it. Title and section slides also take where their text sits
+top to bottom (`--hero-justify`), from the middle of the layout's title and
+text boxes. The content kind sets the tokens on `:root`; a kind that differs
+gets a one-line rule in Decor. `--title-align left|center|right` on any create
+command sets one alignment for every kind of slide.
+
 ## Backgrounds that are pictures
 
 When a template's background is more than one flat color (a photo, a gradient,
@@ -216,7 +227,7 @@ Only `--accent` is required. `--inverse-bg` sets the background of title and
 section slides (default: the accent). For more control, write a JSON spec and
 use `from-spec`; the keys are `name`, `label`, `colors` (`bg`, `text`, `accent`,
 `accent2`, `chart`, `inverse_bg`, `title`), `fonts` (`display`, `body`, `mono`,
-`dir`), `frame` (`x`, `top`, `title_size`, `title_weight`), `shape`, `logo`
+`dir`), `frame` (`x`, `top`, `title_size`, `title_weight`, `title_align`), `shape`, `logo`
 (`light`, `dark`), `icons`, `dark` (false to skip the second variant),
 `backgrounds` (`content`, `title`, `section`, `closing`: a picture file each).
 
