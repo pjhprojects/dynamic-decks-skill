@@ -267,10 +267,13 @@ setup. Users can add their own and choose which to use; read
   `python scripts/add_icons.py ./svgs --name acme --license "..."`
 
 A template whose background is a photo, a gradient or artwork made of shapes
-keeps that background as a picture, one per kind of slide, and the theme
-records where text may go on it and in which color. It is exact when
-LibreOffice is installed; say so when it is not. In such a theme the text area
-can be narrow, so read the notes the command prints before writing slides.
+keeps that background as a picture, one per kind of slide, drawn at twice the
+stage size so rules and lettering stay sharp. Text goes where the template's
+own title and text boxes put it, so a title sits above the rule drawn under it
+or on the band drawn behind it. It is exact when LibreOffice is installed; say
+so when it is not. In such a theme the text area can be narrow and titles may
+have room for one line only, so read the notes the command prints before
+writing slides.
 
 The template's slide master is read for more than colors: which master to use
 when a file has several, title alignment, the footer and slide number, bullets,

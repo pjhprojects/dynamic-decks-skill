@@ -4,6 +4,56 @@ All notable changes to DynamicDecks are listed here. Versions follow
 [semantic versioning](https://semver.org): the number in
 `dynamic-decks/scripts/_deck.py` and the release tag are kept the same.
 
+## 1.3.0 (2026-10-07)
+
+Two faults reported from a real company template, reproduced on templates
+made to match the report, and what they showed about the approach.
+
+- **Background pictures were soft.** They were drawn at 1920 x 1080, the same
+  pixel count as the stage, so on a dense display or full screen they were
+  stretched, and text and thin rules in the artwork blurred. Pictures are now
+  drawn at 3840 x 2160. Line artwork, flat shapes and lettering are stored
+  without loss (such pictures are a few KB); only photographs are compressed,
+  lightly. The build no longer recompresses a theme's pictures. A picture
+  supplied with `--background` keeps its own size up to 3840 px wide.
+- **A title was pushed off the band or rule it belongs with.** The text area
+  was the template's boxes, but then "corrected" against the picture: a title
+  box lying on a band was treated as blocked and moved below it, and the body
+  followed the title instead of starting at its own box, so text could run
+  through a rule under the title. Now the template's text boxes are the
+  authority:
+  - The title box and the text box are kept apart. The title has an area as
+    tall as its box and sits in it as the template has it (`--title-min`,
+    `--title-anchor`); the body starts where the text box starts.
+  - A title on a band or tint stays there, in a color measured from what is
+    under the title box. Body color comes from under the text box.
+  - When the template draws something under the title, `--title-max` records
+    how much room a title has, the report says how many lines fit, and
+    `render.py` reports a title that runs into it.
+  - A box is pulled in only when its edge runs a little way under artwork at
+    the slide's side, and the report says so. A layout with no text boxes gets
+    the built-in margins. Only pictures supplied by hand are searched for
+    their empty part.
+  - Positions now allow for the inset PowerPoint keeps inside a text box, so
+    text starts where it does in PowerPoint.
+- **Nothing the template draws is dropped.** Small artwork (a logo, a thin
+  rule) used to be left out when it covered under 2.5% of the slide, which
+  moved the logo to the footer and lost the rule. It is now kept, where the
+  template has it. Hairlines are detected on the full-size picture. For the
+  old result, a flat theme with a dark variant and the logo in the footer,
+  pass `--backgrounds never`.
+- The report says when a background contains text set in a font that is not
+  installed where the theme is made, since LibreOffice then draws it in a
+  stand-in.
+- `--preview` outlines the title area and the text area separately.
+
+A theme made again from the same template will change: sharper pictures,
+titles placed as the template has them, and, where the template has a logo or
+rule on an otherwise flat slide, a picture theme with one look instead of a
+flat theme with two. Themes already made keep working as they are; their
+pictures are no longer recompressed when a deck is built. The built-in theme
+renders pixel for pixel as before.
+
 ## 1.2.0 (2026-10-07)
 
 A theme made from a PowerPoint template now carries what the slide master

@@ -386,3 +386,9 @@ the type to make it fit.
 A theme with a picture background may leave a much narrower text area than the
 built-in one (the build says how wide). Plan for it: two columns instead of
 four, shorter lines, one idea fewer per slide.
+
+A theme made from a template may also limit titles. When the template draws a
+rule under the title, or sets the title on a band, the title has to stay above
+or inside it: the theme's report and its `theme.json` (`title_area`) say how
+many lines fit, often one. Write titles to that length. `render.py` reports a
+title that runs into the rule or off the band; shorten the title, do not move it.

@@ -43,7 +43,10 @@ that breaks one of them needs a very good reason.
 8. **The built-in theme does not move.** A change to the engine or layouts
    must leave the starter and showcase decks rendering as before unless the
    change is the point; compare screenshots before and after.
-9. **A template's artwork is drawn, not reinterpreted.** A background that is
+9. **A template's text boxes say where text goes.** The picture is measured
+   for color and contrast, never to overrule the template's own layout. Only a
+   picture supplied without a template has its empty part looked for.
+10. **A template's artwork is drawn, not reinterpreted.** A background that is
    more than a flat color is kept as a picture and measured once (text area,
    text color, calm or busy). Slides follow the stored measurements; nothing
    guesses at a picture when a deck is built.
@@ -63,7 +66,7 @@ that breaks one of them needs a very good reason.
 - `tests/fixtures/` holds a deliberately broken deck, PowerPoint templates and
   a few icons used by the tests. The `template-*.pptx` files (a photo
   background, artwork made of shapes, a busy picture, a branded slide master,
-  two slide masters) are written by `tests/fixtures/make_templates.py`, which
+  two slide masters, a rule under the title, a title on a band) are written by `tests/fixtures/make_templates.py`, which
   needs `python-pptx`. Run it only to change them, and name the ones to
   rewrite: `python tests/fixtures/make_templates.py brand`.
 - `dynamic-decks/scripts/_master.py` reads the slide master (which master,

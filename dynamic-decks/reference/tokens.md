@@ -65,6 +65,13 @@ the theme with `text-align: var(--title-align)`. `--hero-justify`
 (`flex-start`, `center`, `flex-end`) is where the text block sits top to
 bottom on title and section slides.
 
+A theme made from a template may give content-slide titles an area of their
+own: `--title-min` is its height (`auto` when there is none), `--title-anchor`
+where the title sits in it (`start`, `center`, `end`), and `--title-max` how
+tall the eyebrow and title may be before they reach something the template
+draws under them (`none` when it draws nothing). A custom slide that places
+its own heading in such a theme should keep it within `--title-max`.
+
 `--column-gap` is the space between the two columns of the two-column layout.
 
 `--frame-left` and `--frame-right` are the side margins on their own. They
