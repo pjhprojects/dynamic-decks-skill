@@ -72,6 +72,11 @@ is the space under the text on title and section slides, and
 `--section-number-gap` the space between a section's number and its title
 (`auto` pins the number to the top of the slide).
 
+The footer line: `--footer-offset` is its distance from the bottom edge,
+`--footer-size` and `--footer-color` its text, and `--footer-label` and
+`--footer-number` are `block` or `none` to show or hide the deck's label and
+the slide number.
+
 ## Background
 
 Set by the theme, not by slides. `--bg-image` is the picture or gradient behind

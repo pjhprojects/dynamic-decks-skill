@@ -561,6 +561,9 @@ html.deck-presenter .deck { display: none !important; }
   --eyebrow-color: var(--color-accent);
   --footer-offset: 44px;
   --footer-color: var(--color-text-subtle);
+  --footer-size: var(--text-xs);
+  --footer-label: block;           
+  --footer-number: block;          
   --radius-sm: 6px;
   --radius-md: 14px;
   --radius-lg: 24px;
@@ -745,11 +748,13 @@ html.deck-presenter .deck { display: none !important; }
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  font-size: var(--text-xs);
+  font-size: var(--footer-size, var(--text-xs));
   line-height: 1;
   color: var(--footer-color);
   pointer-events: none;
 }
+.slide-footer-text { display: var(--footer-label, block); }
+.slide-number { display: var(--footer-number, block); }
 .slide-footer-logo {
   flex: none;
   width: var(--logo-width);

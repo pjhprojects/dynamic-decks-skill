@@ -184,6 +184,9 @@
   --eyebrow-color: var(--color-accent);
   --footer-offset: 44px;
   --footer-color: var(--color-text-subtle);
+  --footer-size: var(--text-xs);
+  --footer-label: block;           /* block or none: the deck's label in the footer */
+  --footer-number: block;          /* block or none: the slide number */
 
   /* Shape */
   --radius-sm: 6px;

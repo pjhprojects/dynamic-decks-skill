@@ -294,6 +294,10 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
             if place:
                 per_kind[kind]["place"] = place
     spec["layouts"] = per_kind
+
+    # Footer label and slide number: where they sit, and whether the template shows them at all
+    on_master = [ET.fromstring(z.read(part)) for part in _master.slides_on(z, master_part)]
+    spec["footer"] = _master.footer(master, layout_xml.get("content"), (cx, cy), px_per_pt, resolve, on_master)
     aligns = {kind: v["title_align"] for kind, v in per_kind.items()}
     if set(aligns.values()) != {"start"}:
         words = {"start": "left", "center": "centered", "end": "right"}
@@ -601,6 +605,34 @@ PANEL_CSS = """/* The panel behind the text on a picture too busy to read over. 
 """
 
 
+def footer_css(label_side: str | None, number_side: str | None, number_first: bool = False) -> str:
+    """Decor rules that put the footer label and the slide number where a template has them.
+
+    The built-in footer is a row: logo, label on the left, number on the right.
+    A side of None means that part is hidden. Returns "" when nothing has to move.
+    """
+    if label_side == number_side == "center":
+        number_side = "right"                     # two things cannot share the middle
+    if (label_side or "left", number_side or "right") == ("left", "right"):
+        return ""
+    items = [(".slide-footer > .slide-footer-text", label_side), (".slide-footer > .slide-number", number_side)]
+    if number_first:
+        items.reverse()
+    rules, order = [], 1
+    for side in ("left", "right"):
+        first = True
+        for selector, where in items:
+            if where != side:
+                continue
+            margin = "auto" if side == "right" and first else "0"
+            rules.append(f"{selector} {{ order: {order}; margin-left: {margin}; }}")
+            order, first = order + 1, False
+    for selector, where in items:
+        if where == "center":
+            rules.append(f"{selector} {{ position: absolute; left: 50%; transform: translateX(-50%); margin: 0; }}")
+    return "\n".join(rules) + "\n"
+
+
 def format_block(selector: str, tokens: dict[str, str]) -> str:
     lines, used = [f"{selector} {{"], set()
     for title, pat in GROUPS:
@@ -743,6 +775,53 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         if not layout_rules[kind]:
             del layout_rules[kind]
 
+    # Footer: which of the label and the slide number show, where, how big and in what color
+    foot = {key: dict((spec.get("footer") or {}).get(key) or {}) for key in ("label", "number")}
+    for key, asked in (("number", getattr(args, "slide_number", None)), ("label", getattr(args, "footer_label", None))):
+        if asked == "off":
+            foot[key].update(shown=False, why="")
+        elif asked:
+            foot[key].update(shown=True, side=asked)
+    footer_rules = ""
+    said = []
+    words = {"label": "footer label", "number": "slide number"}
+    for key, token_name in (("label", "--footer-label"), ("number", "--footer-number")):
+        if foot[key].get("shown") is False:
+            tokens[token_name] = "none"
+            flag = "--slide-number right" if key == "number" else "--footer-label left"
+            if foot[key].get("why", "the template does not show it"):      # hidden by the template, not by a flag
+                notes.append(f"the {words[key]} is hidden because {foot[key].get('why', 'the template does not show it')}; pass {flag} to show it")
+    shown = [key for key in ("number", "label") if foot[key].get("shown", True)]
+    if shown:
+        lead = foot[shown[0]]                      # the slide number sets the line, the label follows it
+        label_side = foot["label"].get("side") or "left"
+        number_side = foot["number"].get("side") or "right"
+        both = len(shown) == 2
+        number_first = both and (foot["number"].get("x") or 0) < (foot["label"].get("x") or 0)
+        footer_rules = footer_css(label_side if "label" in shown else None, number_side if "number" in shown else None, number_first)
+        if footer_rules:
+            said.append(" and ".join(([f"slide number {number_side}"] if "number" in shown else [])
+                                     + ([f"label {label_side}"] if "label" in shown else [])))
+        if lead.get("size") and abs(lead["size"] - 24) > 1:
+            size = max(18, min(30, int(lead["size"])))
+            tokens["--footer-size"] = f"{size}px"
+            said.append(f"{size}px text")
+        if lead.get("offset") is not None and abs(lead["offset"] - 44) > 3:
+            tokens["--footer-offset"] = f"{max(20, min(140, int(lead['offset'])))}px"
+            said.append(f"{tokens['--footer-offset']} from the bottom")
+        if lead.get("color"):
+            try:
+                tokens["--footer-color"] = ensure_contrast(hexc(lead["color"]), bg, 3.0, prefer="darker" if base_mode == "light" else "lighter")
+                said.append("the template's footer color")
+            except ValueError:
+                pass
+    if said:
+        notes.append("the footer follows the template: " + ", ".join(said))
+
+    def px_of(name: str, default: int) -> int:
+        m = re.fullmatch(r"(-?\d+)px", tokens.get(name, ""))
+        return int(m.group(1)) if m else default
+
     # Background pictures: the content one goes on :root, the others get a rule each in Decor
     saved: dict[str, str] = {}
     bg_meta: dict[str, dict] = {}
@@ -802,8 +881,9 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             tokens["--frame-top"] = f"{max(48, min(300, round(safe[1])))}px"
             tokens["--frame-bottom"] = f"{bottom}px"
             if content.get("image") is not None and content["calm"]:
-                lift = _backgrounds.footer_offset(content["image"], left, right)
-                if lift > 44:
+                base_offset = px_of("--footer-offset", 44)
+                lift = _backgrounds.footer_offset(content["image"], left, right, offset=base_offset)
+                if lift > base_offset:
                     tokens["--footer-offset"] = f"{lift}px"
                     tokens["--frame-bottom"] = f"{max(bottom, lift + 76)}px"
                     notes.append(f"the footer was raised to {lift}px from the bottom so it sits clear of the artwork there")
@@ -813,6 +893,11 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         notes.append("the content background is a picture, so this theme has one look: there is no automatic dark version")
     elif content:
         remember("content", content, "")
+
+    # content must end clear of the footer line, wherever the template put it
+    foot_top = px_of("--footer-offset", 44) + px_of("--footer-size", 24) + 40
+    if px_of("--frame-bottom", 120) < foot_top:
+        tokens["--frame-bottom"] = f"{foot_top}px"
 
     hero_css = []
     title_entry = kinds.get("title")
@@ -902,6 +987,8 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
     if len(blocks) > 1:
         css += f"\n/* ---- 3. Variant: {other} {'-' * 52} */\n" + blocks[1] + "\n"
     css += "\n/* ---- 4. Decor ----------------------------------------------------------- */\n/* Optional extra CSS for the frame: rules, marks, logo placement. */\n"
+    if footer_rules:
+        css += "/* The footer, arranged as in the template: where the label and the slide number sit. */\n" + footer_rules
     if layout_rules:
         css += ("/* What the template's layouts set for each kind of slide. */\n"
                 + "".join(f'.slide[data-layout="{kind}"] {{ ' + " ".join(f"{k}: {v};" for k, v in decl.items()) + " }\n"
@@ -1129,6 +1216,10 @@ def main() -> None:
         p.add_argument("--shape", choices=sorted(SHAPES), help="corner style (default soft)")
         p.add_argument("--title-align", choices=("left", "center", "right"),
                        help="align titles on every kind of slide (from-pptx: overrides what the template says)")
+        p.add_argument("--slide-number", choices=("left", "center", "right", "off"),
+                       help="where the slide number sits in the footer, or off to hide it (from-pptx: overrides the template)")
+        p.add_argument("--footer-label", choices=("left", "center", "right", "off"),
+                       help="where the deck's footer label sits, or off to hide it (from-pptx: overrides the template)")
         p.add_argument("--icons", help="icon set this theme should use")
         p.add_argument("--single-variant", action="store_true", help="do not derive the second (dark or light) variant")
         p.add_argument("--background", action="append", metavar="KIND=FILE",

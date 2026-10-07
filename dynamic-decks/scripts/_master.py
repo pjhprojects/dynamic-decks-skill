@@ -175,3 +175,76 @@ def hero_place(master, layout, size: tuple[int, int]) -> str | None:
     top, bottom = min(b[1] for b in boxes), max(b[1] + b[3] for b in boxes)
     middle = (top + bottom) / 2 / 1080
     return "center" if 0.38 <= middle <= 0.62 else ("flex-end" if middle > 0.62 else "flex-start")
+
+
+# --------------------------------------------------------------------------
+# Footer and slide number
+# --------------------------------------------------------------------------
+def slides_on(z: zipfile.ZipFile, master_part: str) -> list[str]:
+    """The slides in the file that are built on this master."""
+    names = set(z.namelist())
+    out, layout_master = [], {}
+    for part in sorted(n for n in names if re.fullmatch(r"ppt/slides/[^/]+\.xml", n)):
+        layout = next((t for typ, t in rels_of(z, part).values() if typ == "slideLayout"), None)
+        if layout and layout not in layout_master:
+            layout_master[layout] = next((t for typ, t in rels_of(z, layout).values() if typ == "slideMaster"), "")
+        if layout and layout_master[layout] == master_part:
+            out.append(part)
+    return out
+
+
+def _plain_color(node, resolve) -> str | None:
+    """A solid fill's color when it is a plain one; a tint or shade of a theme color is left to the theme."""
+    fill = node.find("a:solidFill", NS) if node is not None else None
+    if fill is None:
+        return None
+    scheme = fill.find("a:schemeClr", NS)
+    if scheme is not None and len(list(scheme)):
+        return None
+    return resolve(fill)
+
+
+def footer(master, layout, size: tuple[int, int], px_per_pt: float, resolve, slides: list | None = None) -> dict:
+    """Where the template puts its footer label and slide number, and whether it shows them.
+
+    Returns {"label": {...}, "number": {...}}; each has `shown`, `why` (when
+    not shown), `side` (left, center, right), `x` (where its text starts, stage
+    px), `offset` (px from the bottom edge to the bottom of its text), `size`
+    (px) and `color` (when the template gives a plain one). `slides` are the
+    parsed slides built on this master, used as evidence of what the deck shows.
+    """
+    switches = {}
+    for root in (master, layout):                # a layout's switches override its master's
+        hf = root.find("p:hf", NS) if root is not None else None
+        if hf is not None:
+            switches.update({k: hf.get(k, "1") for k in ("sldNum", "ftr", "dt")})
+    out = {}
+    for key, kind in (("label", "ftr"), ("number", "sldNum")):
+        on_layout = placeholders(layout, (kind,)) if layout is not None else []
+        on_master = placeholders(master, (kind,))
+        entry: dict = {"shown": True}
+        if switches.get(kind) in ("0", "false"):
+            entry.update(shown=False, why="it is switched off on the slide master")
+        elif not on_master and not on_layout:
+            entry.update(shown=False, why="the template has no box for it")
+        elif layout is not None and not on_layout:
+            entry.update(shown=False, why="its content layout has no box for it")
+        elif slides is not None and len(slides) >= 3 and not any(placeholders(s, (kind,)) for s in slides):
+            entry.update(shown=False, why=f"none of its {len(slides)} slides shows one")
+        sources = [sp for sp in (on_layout[:1] + on_master[:1])]
+        box = next((b for b in (box_of(sp, size) for sp in sources) if b), None)
+        levels = [lvl for lvl in (_level(sp) for sp in sources) if lvl is not None]
+        algn = _first(*[lvl.get("algn") for lvl in levels]) or ("r" if kind == "sldNum" else "l")
+        runs = [lvl.find("a:defRPr", NS) for lvl in levels]
+        runs = [r for r in runs if r is not None]
+        sz = _first(*[r.get("sz") for r in runs])
+        entry["size"] = round(int(sz) / 100 * px_per_pt) if sz and sz.isdigit() else None
+        entry["color"] = _first(*[_plain_color(r, resolve) for r in runs])
+        if box:
+            anchor = box[0] + {"start": 0, "center": box[2] / 2, "end": box[2]}[ALIGN.get(algn, "start")]
+            entry["x"] = round(anchor)
+            entry["side"] = "left" if anchor < 0.36 * 1920 else ("right" if anchor > 0.64 * 1920 else "center")
+            text = entry["size"] or 24
+            entry["offset"] = round(1080 - (box[1] + box[3] / 2) - text / 2)
+        out[key] = entry
+    return out

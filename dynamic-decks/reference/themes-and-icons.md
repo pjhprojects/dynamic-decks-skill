@@ -125,6 +125,28 @@ text boxes. The content kind sets the tokens on `:root`; a kind that differs
 gets a one-line rule in Decor. `--title-align left|center|right` on any create
 command sets one alignment for every kind of slide.
 
+**Footer and slide number.** The master's footer box and slide-number box are
+read for where they sit (left, center or right, and how far from the bottom
+edge), their text size, and their color when it is a plain one. The footer
+keeps the deck's own label (`deck:footer`) and the slide number; only their
+arrangement follows the template. Size, color and height become
+`--footer-size`, `--footer-color` and `--footer-offset`, and an arrangement
+other than "label left, number right" is a few rules in Decor. The date box is
+not carried.
+
+A template can also say that it shows no slide number or no footer text. The
+theme then hides that part (`--footer-number: none`, `--footer-label: none`)
+and the report says why, which is one of:
+
+- it is switched off on the slide master,
+- the master or the content layout has no box for it,
+- the file has three or more slides on that master and none of them shows one.
+
+`--slide-number left|center|right|off` and `--footer-label left|center|right|off`
+override what the template says, and work on `new` and `from-spec` too. Tell the
+user when a part was hidden: a deck's `deck:footer` label will not appear in a
+theme that hides it.
+
 ## Backgrounds that are pictures
 
 When a template's background is more than one flat color (a photo, a gradient,

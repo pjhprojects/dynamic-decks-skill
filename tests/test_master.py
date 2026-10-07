@@ -118,4 +118,58 @@ with sync_playwright() as p:
     t.ok("a layout that sets its own alignment keeps it", section["align"] == "start" and section["mid"] < 900, section)
     browser.close()
 
+# ---- footer and slide number ---------------------------------------------------------
+proc, brand, css, meta = make("template-brand.pptx", "brand-footer")
+t.ok("the footer's text size and color come from the master", token(css, "--footer-size") == "20px" and token(css, "--footer-color") == "#6B6B6B",
+     token(css, "--footer-size") + " " + token(css, "--footer-color"))
+t.ok("the number and the label are placed as in the template", ".slide-footer > .slide-number { order: 1; margin-left: 0; }" in css
+     and ".slide-footer > .slide-footer-text { position: absolute; left: 50%;" in css)
+t.ok("both are shown when the template shows them", token(css, "--footer-label") == "block" and token(css, "--footer-number") == "block")
+t.ok("the report says how the footer was arranged", "the footer follows the template: slide number left and label center, 20px text" in proc.stdout)
+proc, m, css, meta = make("template-masters.pptx", "masters-footer")
+t.ok("a deck whose slides show no number gets a theme that hides it", token(css, "--footer-number") == "none"
+     and "the slide number is hidden because none of its 3 slides shows one" in proc.stdout, token(css, "--footer-number"))
+proc, m, css, meta = make("template-masters.pptx", "masters-footer-on", "--slide-number", "right", "--footer-label", "left")
+t.ok("--slide-number and --footer-label override the template", token(css, "--footer-number") == "block" and token(css, "--footer-label") == "block"
+     and "is hidden" not in proc.stdout)
+
+import zipfile  # noqa: E402
+
+switched = OUT / "template-number-off.pptx"
+with zipfile.ZipFile(FIXTURES / "template-brand.pptx") as zin, zipfile.ZipFile(switched, "w", zipfile.ZIP_DEFLATED) as zout:
+    for item in zin.namelist():
+        data = zin.read(item)
+        if item == "ppt/slideMasters/slideMaster1.xml":
+            data = data.replace(b'<p:hf dt="0"/>', b'<p:hf sldNum="0" dt="0"/>')
+        zout.writestr(item, data)
+proc = run("add_theme.py", "from-pptx", switched, "--name", "number-off", env=ENV)
+css = (lib / "themes" / "number-off" / "theme.css").read_text(encoding="utf-8")
+t.ok("a slide number switched off on the master is hidden, and the label stays", token(css, "--footer-number") == "none"
+     and token(css, "--footer-label") == "block" and "switched off on the slide master" in proc.stdout, proc.stdout[-400:])
+proc = run("add_theme.py", "new", "--name", "foot-new", "--accent", "#2B6CF0", "--slide-number", "left", "--footer-label", "off", env=ENV)
+css = (lib / "themes" / "foot-new" / "theme.css").read_text(encoding="utf-8")
+t.ok("a theme from brand values can place or hide them too", token(css, "--footer-label") == "none"
+     and ".slide-footer > .slide-number { order: 1; margin-left: 0; }" in css, proc.stdout[-300:])
+
+FOOTER = """() => {
+  const s = Deck.slides.find((x) => x.dataset.layout === 'bullets'), f = s.querySelector(':scope > .slide-footer');
+  const at = (sel) => { const e = f.querySelector(sel), r = e.getBoundingClientRect(), sr = s.getBoundingClientRect();
+    return { shown: getComputedStyle(e).display !== 'none', mid: Math.round((r.left + r.right) / 2 - sr.left) }; };
+  return { number: at('.slide-number'), label: at('.slide-footer-text'), size: getComputedStyle(f).fontSize };
+}"""
+deck = OUT / "master-footer.html"
+build(STARTER_SRC, deck, "--theme", "brand-footer", env=ENV)
+hidden = OUT / "master-footer-hidden.html"
+build(STARTER_SRC, hidden, "--theme", "masters-footer", env=ENV)
+with sync_playwright() as p:
+    browser, page = open_deck(p, deck)
+    f = page.evaluate(FOOTER)
+    t.ok("in the deck, the number is on the left and the label in the middle", f["number"]["mid"] < 500 and abs(f["label"]["mid"] - 960) < 6, f)
+    t.ok("and the footer text has the template's size", f["size"] == "20px", f["size"])
+    browser.close()
+    browser, page = open_deck(p, hidden)
+    f = page.evaluate(FOOTER)
+    t.ok("a hidden number and label are not drawn", not f["number"]["shown"] and not f["label"]["shown"], f)
+    browser.close()
+
 t.done()
