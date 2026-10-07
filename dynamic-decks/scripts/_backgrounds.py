@@ -563,38 +563,103 @@ def roomy(safe: tuple, min_w: int = 1100, min_h: int = 720, margin: int = 64) ->
     return (round(x), round(y), round(min(w, STAGE_W - 2 * margin)), round(min(h, STAGE_H - 2 * margin)))
 
 
-def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[int, int], resolve,
-                  dark_text: str, light_text: str, mode: str = "auto", work: Path | None = None) -> tuple[dict, list[str]]:
-    """Backgrounds for each kind of slide. Returns (kind -> entry, notes).
+RESERVED = {"none", "content", "title", "section", "closing", "image", "panel"}   # names a layout may not take
+MAX_MORE = 12
 
-    An entry is {"flat": color} for a plain background, or a picture entry:
-    image (PIL) or css (a gradient), safe, ink, text, bg, worst, panel, calm,
-    art, description, layout, rendered.
+
+def other_layouts(z: zipfile.ZipFile, master_part: str, taken: set[str]) -> list[dict]:
+    """The master's remaining layouts that may have a look of their own.
+
+    A layout qualifies when it sets its own background, carries its own
+    artwork, or switches the master's shapes off. Whether it really differs
+    from the content layout is decided later, from the pictures.
+    """
+    names = set(z.namelist())
+    found = []
+    for typ, target in rels_of(z, master_part).values():
+        if typ != "slideLayout" or target in taken or target not in names:
+            continue
+        root = ET.fromstring(z.read(target))
+        csld = root.find("p:cSld", NS)
+        tree = root.find("p:cSld/p:spTree", NS)
+        art = 0
+        if tree is not None:
+            art = (len(tree.findall("p:pic", NS)) + len(tree.findall("p:grpSp", NS)) + len(tree.findall("p:cxnSp", NS))
+                   + sum(1 for sp in tree.findall("p:sp", NS) if sp.find("p:nvSpPr/p:nvPr/p:ph", NS) is None))
+        own_bg = root.find("p:cSld/p:bg", NS) is not None
+        if own_bg or art or root.get("showMasterSp", "1") in ("0", "false"):
+            found.append({"part": target, "type": root.get("type", ""), "own_bg": own_bg,
+                          "name": (csld.get("name") if csld is not None else "") or root.get("type", "") or "layout"})
+    found.sort(key=lambda entry: [int(n) for n in re.findall(r"\d+", entry["part"])])
+    return found
+
+
+def slug(name: str, used: set[str]) -> str:
+    """A layout's name as a word a slide can put in data-bg."""
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "layout"
+    word, n = base, 2
+    while word in RESERVED or word in used:
+        word, n = f"{base}-{n}", n + 1
+    used.add(word)
+    return word
+
+
+def _same_look(a: dict, b: dict) -> bool:
+    """Whether two entries would look the same behind a slide."""
+    if "flat" in a or "flat" in b:
+        if not ("flat" in a and "flat" in b):
+            return False
+        ca, cb = (tuple(int(e["flat"][i:i + 2], 16) for i in (1, 3, 5)) for e in (a, b))
+        return max(abs(x - y) for x, y in zip(ca, cb)) <= 6
+    if a.get("css") or b.get("css"):
+        return a.get("css") == b.get("css")
+    from PIL import Image, ImageChops, ImageStat
+    small = [e["image"].convert("RGB").resize((96, 54), Image.BILINEAR) for e in (a, b)]
+    return max(ImageStat.Stat(ImageChops.difference(*small)).mean) < 1.5
+
+
+def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[int, int], resolve,
+                  dark_text: str, light_text: str, mode: str = "auto", work: Path | None = None,
+                  more: bool = True) -> tuple[dict, dict, list[str]]:
+    """Backgrounds from a template. Returns (kind -> entry, name -> entry, notes).
+
+    The first dict has the four kinds of slide (content, title, section,
+    closing). The second has every other layout that looks different from all
+    of those, under a name made from the layout's own; a slide asks for one
+    with data-bg. An entry is {"flat": color} for a plain background, or a
+    picture entry: image (PIL) or css (a gradient), safe, ink, text, bg,
+    worst, panel, calm, art, description, layout, rendered.
     """
     notes: list[str] = []
     if mode == "never":
-        return {}, notes
+        return {}, {}, notes
     try:
         from PIL import Image
     except ImportError:
-        return {}, ["Pillow is not installed, so the template's backgrounds could not be examined; flat colors were used"]
+        return {}, {}, ["Pillow is not installed, so the template's backgrounds could not be examined; flat colors were used"]
     layouts = find_layouts(z, master_part)
     if "content" not in layouts:
-        return {}, ["the template has no ordinary content layout; its backgrounds were not examined"]
+        return {}, {}, ["the template has no ordinary content layout; its backgrounds were not examined"]
+    others = other_layouts(z, master_part, {entry["part"] for entry in layouts.values()}) if more else []
+    if len(others) > MAX_MORE:
+        notes.append(f"the template has {len(others)} more layouts with a look of their own; the first {MAX_MORE} were examined")
+        others = others[:MAX_MORE]
     work = work or Path(tempfile.mkdtemp(prefix="dynamic-decks-bg-"))
-    pictures, why = render(src, layouts, work / "render")
+    to_draw = dict(layouts)
+    to_draw.update({f"more{i}": entry for i, entry in enumerate(others)})
+    pictures, why = render(src, to_draw, work / "render")
     master = ET.fromstring(z.read(master_part))
-    out: dict[str, dict] = {}
-    skipped_art = False
-    for kind, entry in layouts.items():
+    state: dict = {"skipped_art": False, "marks": []}
+
+    def examine(key: str, entry: dict, what: str, hero: bool) -> dict | None:
         layout = ET.fromstring(z.read(entry["part"]))
         safe = text_area(layout, master, size)
         fill, el, owner = fill_of(layout, master, entry["part"], master_part)
         shapes = art_count(layout, master)
         css = css_gradient(el, resolve) if fill == "gradient" else None
         im = None
-        if kind in pictures:
-            im = Image.open(pictures[kind]).convert("RGB")
+        if key in pictures:
+            im = Image.open(pictures[key]).convert("RGB")
         elif fill == "picture":
             blip = el.find("a:blip", NS)
             target = rels_of(z, owner).get(blip.get(f"{{{NS['r']}}}embed") if blip is not None else "", ("", ""))[1]
@@ -606,39 +671,61 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
                     im = None
         elif css:
             im = paint_gradient(css)
-        if kind not in pictures and shapes and fill != "solid":
-            skipped_art = True
+        if key not in pictures and shapes and fill != "solid":
+            state["skipped_art"] = True
         if im is None:
-            if kind not in pictures and fill in ("gradient", "pattern", "ref") and fill != "ref":
-                notes.append(f"the {kind} slide's background is a {fill} that could not be read without LibreOffice; a flat color was used")
-            if kind not in pictures and shapes:
-                skipped_art = True
+            if key not in pictures and fill in ("gradient", "pattern"):
+                notes.append(f"the background of {what} is a {fill} that could not be read without LibreOffice; a flat color was used")
+            if key not in pictures and shapes:
+                state["skipped_art"] = True
             if fill == "solid" and resolve(el):   # not drawn, but the file says which flat color it is
-                out[kind] = {"flat": resolve(el)}
-            continue
+                return {"flat": resolve(el)}
+            return None
         result = _entry(im, safe, dark_text, light_text, mode)
         if "flat" not in result:
-            if css and (shapes == 0 or kind not in pictures):
+            if css and (shapes == 0 or key not in pictures):
                 # a plain gradient stays as code: exact, sharp, and tiny. So does one whose shapes could not be drawn.
                 result["css"], result["image"] = css, None
                 colors = re.findall(r"#[0-9A-Fa-f]{6}", css)
                 extra = " with nothing else on it" if shapes == 0 else "; the shapes the template draws over it were left out"
                 result["description"] = (f"A gradient from {colors[0]} to {colors[-1]}{extra}. "
                                          + result["description"].rsplit(". ", 1)[-1])
-            if kind != "content" and not result["calm"] and result.get("safe"):
+            if hero and not result["calm"] and result.get("safe"):
                 result["safe"] = roomy(result["safe"])
-            result.update(layout=entry["name"] or entry["type"], rendered=kind in pictures)
+            result.update(layout=entry["name"] or entry["type"], rendered=key in pictures)
         elif result.get("marks"):
-            notes.append(f"the {kind} slide has small marks on it ({result['marks'] * 100:.1f}% of the slide) that were left out; "
-                         "pass --backgrounds always to keep them as a picture")
-        out[kind] = result
+            state["marks"].append((what, result["marks"]))
+        return result
+
+    out: dict[str, dict] = {}
+    for kind, entry in layouts.items():
+        result = examine(kind, entry, f"the {kind} slide", kind != "content")
+        if result is not None:
+            out[kind] = result
+
+    extra: dict[str, dict] = {}
+    used: set[str] = set()
+    for i, entry in enumerate(others):
+        if f"more{i}" not in pictures and not entry["own_bg"]:
+            continue                              # nothing to go by without a drawing
+        result = examine(f"more{i}", entry, f"the \"{entry['name']}\" layout", False)
+        if result is None or any(_same_look(result, seen) for seen in list(out.values()) + list(extra.values())):
+            continue
+        result.setdefault("layout", entry["name"])
+        extra[slug(entry["name"], used)] = result
+
+    if state["marks"]:
+        where = [what for what, _ in state["marks"]]
+        listed = where[0] if len(where) == 1 else ", ".join(where[:-1]) + " and " + where[-1]
+        notes.append(f"{listed} {'has' if len(where) == 1 else 'have'} small marks ({max(m for _, m in state['marks']) * 100:.1f}% of the "
+                     "slide, often a logo) that were left out of the background; pass --backgrounds always to keep them as a picture")
     if not pictures:
         notes.append(f"{why}, so backgrounds were read from the file instead of being drawn"
-                     + ("; artwork made of shapes was left out" if skipped_art else "")
+                     + ("; artwork made of shapes was left out" if state["skipped_art"] else "")
                      + ". Install LibreOffice and run this again for an exact copy.")
-    elif len(pictures) < len(layouts):
+    elif len(pictures) < len(to_draw):
         notes.append("LibreOffice drew only some of the layouts; the others use a flat color")
-    return out, notes
+    return out, extra, notes
 
 
 def from_files(files: dict[str, Path], dark_text: str, light_text: str) -> tuple[dict, list[str]]:

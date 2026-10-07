@@ -73,7 +73,8 @@ in px against that stage (2px is 1pt on a standard 13.33in slide).
 | Attribute | Effect |
 |---|---|
 | `data-tone="inverse"` | Saturated background with light text, as on title slides. Also `surface`, `accent-soft`; `plain` on a title, section or closing slide makes it light. |
-| `data-bg="title"`, `"section"`, `"closing"`, `"none"` | In a theme with picture backgrounds: puts the slide on that kind's picture, with its margins and text colors; `none` makes the slide flat. Does nothing in a flat theme. |
+| `data-bg="title"`, `"section"`, `"closing"`, `"none"` | Puts the slide on that kind's background, with its margins and text colors; `none` gives a flat slide in a theme whose background is a picture. In a flat theme the three kinds share the title slide's color. |
+| `data-bg="<name>"` | A background the theme took from one of the template's other layouts, such as `quote` or `dark-content`. The names are in the theme's `theme.json` under `backgrounds`; the build reports one the theme does not have. |
 | `data-align="center"` or `"bottom"` | Vertical position of the body content. |
 | `data-footer="off"` | Hides the footer and slide number. `on` shows it where a layout hides it. |
 | `data-progress="off"` | Hides the progress bar while this slide is shown. |

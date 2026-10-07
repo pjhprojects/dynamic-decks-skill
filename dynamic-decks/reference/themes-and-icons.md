@@ -9,6 +9,7 @@ and choose which to use. Read this when a user wants to add, change or choose on
 - [Where things live](#where-things-live)
 - [Choosing a theme or icon set for a deck](#choosing-a-theme-or-icon-set-for-a-deck)
 - [Adding a theme from a PowerPoint template](#adding-a-theme-from-a-powerpoint-template)
+- [What a theme takes from the slide master](#what-a-theme-takes-from-the-slide-master)
 - [Backgrounds that are pictures](#backgrounds-that-are-pictures)
 - [Adding a theme from a brand guide or description](#adding-a-theme-from-a-brand-guide-or-description)
 - [What a theme is](#what-a-theme-is)
@@ -92,6 +93,95 @@ What a template cannot give, and what happens instead:
 A PowerPoint template never converts perfectly. Say so, and treat the first
 result as a draft to review with the user.
 
+## What a theme takes from the slide master
+
+The slide master, and the layouts under it, hold more of a brand than its
+colors. `from-pptx` reads the following once and stores each as a token or a
+rule in the theme, so slides follow it without anyone opening the template again.
+
+**Which master.** A file can hold several slide masters: a light and a dark
+version, one per sub-brand, or leftovers that came along when slides were
+pasted in from another deck. The theme is made from the master most slides
+use, or the first when the file has no slides (a pure template). When there is
+more than one, the report lists them all with how many layouts and slides each
+has, and says which was used and why. To use another:
+
+```bash
+python scripts/add_theme.py from-pptx Template.pptx --name acme-dark --master 2
+python scripts/add_theme.py from-pptx Template.pptx --name acme-dark --master "Corporate Dark"
+```
+
+A wrong master is the usual reason a new theme has colors or a background the
+user does not recognize, so read that line of the report first.
+
+**Title alignment.** Whether titles sit left, centered or right is read for
+each kind of slide: from the layout's title box, then the master's, then the
+master's title style. PowerPoint's own default master centers titles, so many
+templates do. It becomes `--title-align` (`start`, `center` or `end`), which
+moves the eyebrow, title and subtitle together; body content stays as each
+layout arranges it. Title and section slides also take where their text sits
+top to bottom (`--hero-justify`), from the middle of the layout's title and
+text boxes. The content kind sets the tokens on `:root`; a kind that differs
+gets a one-line rule in Decor. `--title-align left|center|right` on any create
+command sets one alignment for every kind of slide.
+
+**Footer and slide number.** The master's footer box and slide-number box are
+read for where they sit (left, center or right, and how far from the bottom
+edge), their text size, and their color when it is a plain one. The footer
+keeps the deck's own label (`deck:footer`) and the slide number; only their
+arrangement follows the template. Size, color and height become
+`--footer-size`, `--footer-color` and `--footer-offset`, and an arrangement
+other than "label left, number right" is a few rules in Decor. The date box is
+not carried.
+
+A template can also say that it shows no slide number or no footer text. The
+theme then hides that part (`--footer-number: none`, `--footer-label: none`)
+and the report says why, which is one of:
+
+- it is switched off on the slide master,
+- the master or the content layout has no box for it,
+- the file has three or more slides on that master and none of them shows one.
+
+`--slide-number left|center|right|off` and `--footer-label left|center|right|off`
+override what the template says, and work on `new` and `from-spec` too. Tell the
+user when a part was hidden: a deck's `deck:footer` label will not appear in a
+theme that hides it.
+
+**Bullets.** The bullet at the first two levels of body text is read from the
+content layout, then the master's text box, then the master's body style: its
+character, its color, its size against the text and its indent. Dots, squares
+and dashes are drawn as shapes, so they look the same in every font. Symbol
+fonts are understood for the common cases (a Wingdings square, arrow or check;
+a Symbol dot); another ordinary character is kept as a character; anything
+else becomes a dot and is reported. A bullet with no color of its own takes
+the text color, as it does in PowerPoint. All of it lands in the `--bullet-*`
+tokens for level one and `--bullet-2-*` for level two. Picture bullets are not
+carried. `--bullet dash|dot|square|none` sets the first level by hand.
+
+**Body text.** The template's first-level body size is read and reported, but
+not copied. A PowerPoint slide is usually one text box set at 24 to 32pt (48
+to 64px on this stage); the layouts here put several blocks on a slide and set
+bullets at 44px, so copying the template's size would make them overflow.
+Instead the theme leans the same way: a template clearly below that range
+makes `--text-sm` to `--text-lg` up to 10% smaller, one above it up to 10%
+larger, and anything inside it changes nothing. Line spacing is carried when
+the template sets it (`--leading-snug`, `--leading-normal`). If a user wants
+body text as large as their template's, say what it costs: fewer words per
+slide, and edit the `--text-*` tokens in `theme.css` by hand.
+
+**Columns.** The gap between the two text columns of the master's two-content
+layout becomes `--column-gap`, used by the two-column layout.
+
+**Other layouts.** A template usually has more layouts than content, title and
+section: a quote slide, a dark version of the content slide, a divider. Any
+layout that looks different from those becomes a background a slide can ask
+for by name; see [More backgrounds, by name](#more-backgrounds-by-name).
+
+What is not taken from the master: the date box, picture bullets, table and
+chart styles, tints and shades of theme colors, and PowerPoint's own
+placeholder arrangements (comparison, picture with caption, vertical text).
+The fifteen layouts here stay as they are; the theme changes how they look.
+
 ## Backgrounds that are pictures
 
 When a template's background is more than one flat color (a photo, a gradient,
@@ -136,6 +226,9 @@ The theme turns those into rules, so the ordinary layouts need nothing from you:
 - Title, section and closing slides each get a rule in the theme's Decor
   section with their picture, margins and colors. A template with no closing
   layout uses the title's.
+- Each picture file is declared once as a token (`--bg-content`, `--bg-title`
+  and so on) and used by name, so a deck holds one copy however many kinds of
+  slide share it.
 - A busy picture gets `--bg-panel`, a translucent panel over the text area.
   The rule that draws it is in the theme's Decor and uses `.slide::before`, so
   in such a theme a custom slide's own decoration needs an element of its own.
@@ -160,6 +253,36 @@ When writing slides in such a theme:
   frame. Anything positioned by hand may land on the artwork.
 - `render.py` compares every piece of text with the pixels really behind it and
   reports the ones that are hard to read. Move the text; do not recolor it.
+
+### More backgrounds, by name
+
+Every other layout in the template is examined too. One that sets its own
+background, carries its own artwork or switches the master's artwork off is
+drawn like the four kinds above, and kept when it looks different from all of
+them. It gets a name made from the layout's own ("Dark Content" becomes
+`dark-content`), and a slide asks for it with that name:
+
+```html
+<section class="slide" data-layout="quote" data-bg="quote"> ... </section>
+<section class="slide" data-layout="bullets" data-bg="dark-content"> ... </section>
+```
+
+Each is a rule in the theme's Decor with the picture or flat color, the
+margins that keep text off its artwork, and a full set of colors that read on
+it (text, accents, chart colors), so any layout works on it. The names, with
+a description and text area for each, are in `theme.json` under `backgrounds`
+(marked `"extra": true`), and the report lists them. Before writing slides in
+such a theme, read that list: a quote on the quote background and a divider
+on the divider background is what makes a deck look like the template.
+
+- Without LibreOffice only layouts with their own background fill are found;
+  a layout that differs by artwork alone needs the drawing.
+- At most twelve are kept. `--no-extra-backgrounds` keeps to the four kinds.
+- The build embeds only the pictures a deck uses and says which it left out.
+  A deck rebuilt later from its own embedded theme cannot bring those back;
+  rebuild with the theme installed.
+- The build reports a `data-bg` name the theme does not have, with the names
+  it does have. That slide gets the ordinary background.
 
 To supply pictures yourself, with a template or without one:
 
@@ -194,9 +317,13 @@ Only `--accent` is required. `--inverse-bg` sets the background of title and
 section slides (default: the accent). For more control, write a JSON spec and
 use `from-spec`; the keys are `name`, `label`, `colors` (`bg`, `text`, `accent`,
 `accent2`, `chart`, `inverse_bg`, `title`), `fonts` (`display`, `body`, `mono`,
-`dir`), `frame` (`x`, `top`, `title_size`, `title_weight`), `shape`, `logo`
+`dir`), `frame` (`x`, `top`, `title_size`, `title_weight`, `title_align`), `shape`, `logo`
 (`light`, `dark`), `icons`, `dark` (false to skip the second variant),
-`backgrounds` (`content`, `title`, `section`, `closing`: a picture file each).
+`backgrounds` (`content`, `title`, `section`, `closing`: a picture file each),
+`bullets` (a list for level one and two, each with `shape`: `dot`, `square`,
+`dash`, `char` or `none`, and optionally `char`, `color`, `indent`), `footer`
+(`number` and `label`, each with `shown` and `side`), `body` (`size_pt`, `line`).
+`frame` also takes `column_gap`.
 
 Colors that would be unreadable are adjusted and listed in the review notes,
 so tell the user when a brand color was changed and why.

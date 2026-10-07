@@ -4,6 +4,51 @@ All notable changes to DynamicDecks are listed here. Versions follow
 [semantic versioning](https://semver.org): the number in
 `dynamic-decks/scripts/_deck.py` and the release tag are kept the same.
 
+## 1.2.0 (2026-10-07)
+
+A theme made from a PowerPoint template now carries what the slide master
+holds besides colors, fonts and backgrounds.
+
+- **Several slide masters.** A file can hold more than one (light and dark,
+  sub-brands, leftovers from pasted slides). The theme is made from the one
+  most slides use; the report lists them all, and `--master` takes a number
+  or a name to pick another.
+- **Title alignment.** Left, centered or right is read for each kind of slide
+  and becomes `--title-align`, which moves the eyebrow, title and subtitle
+  together. PowerPoint's own default master centers titles, so themes from
+  many templates now do too. Title and section slides also take where their
+  text sits top to bottom (`--hero-justify`).
+- **Footer and slide number.** Their side, height, text size and color follow
+  the master's footer boxes (`--footer-size`, `--footer-offset`,
+  `--footer-color`, and a few rules for the arrangement). A template that
+  shows no slide number or footer text gets a theme that hides it
+  (`--footer-number`, `--footer-label`), and the report says why.
+- **Bullets.** The first two levels take the template's bullet: a dot, square,
+  dash, another character or none, with its color and indent
+  (`--bullet-*`, `--bullet-2-*`). Common symbol-font bullets are understood.
+- **Body text.** The template's body size is reported and the type scale leans
+  toward it by at most 10%; it is not copied, because these layouts hold more
+  on a slide than one PowerPoint text box. Line spacing is carried.
+- **More layouts as named backgrounds.** Every other layout with a look of its
+  own (a quote slide, a dark content slide, a divider) becomes a background a
+  slide asks for with `data-bg="name"`, with its own margins and colors.
+- **Smaller decks.** Each background picture is now in a deck once, however
+  many kinds of slide share it, and pictures a deck does not use are left out.
+  The build reports a `data-bg` name the theme does not have.
+- The two-content layout's gap becomes `--column-gap`.
+- New flags on the create commands: `--title-align`, `--bullet`,
+  `--slide-number`, `--footer-label`; on `from-pptx` also `--master` and
+  `--no-extra-backgrounds`.
+
+The built-in theme renders pixel for pixel as in 1.1.0, and themes made with
+1.0 or 1.1 keep working: every new token has a default equal to the old
+behavior. A theme made again from the same template with 1.2 will look
+different where the template says so (centered titles, dot bullets, the footer).
+
+Still tested only on templates made for the tests. Not carried: the date box,
+picture bullets, the logo's position on the master, table and chart styles,
+and PowerPoint's own placeholder arrangements.
+
 ## 1.1.0 (2026-10-07)
 
 Branded backgrounds from PowerPoint templates are kept as they were designed.

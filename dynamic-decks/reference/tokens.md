@@ -58,7 +58,14 @@ padding and offsets so custom slides share the deck's rhythm.
 
 `--frame-x`, `--frame-top`, `--frame-bottom` are the slide margins;
 `--title-gap` the space under the title; `--title-size`, `--title-weight`,
-`--title-color`, `--title-measure` shape the slide title.
+`--title-color`, `--title-measure` shape the slide title. `--title-align` is
+`start`, `center` or `end`: it aligns the eyebrow, title and subtitle together,
+and works in both `text-align` and `align-self`, so a custom heading can follow
+the theme with `text-align: var(--title-align)`. `--hero-justify`
+(`flex-start`, `center`, `flex-end`) is where the text block sits top to
+bottom on title and section slides.
+
+`--column-gap` is the space between the two columns of the two-column layout.
 
 `--frame-left` and `--frame-right` are the side margins on their own. They
 equal `--frame-x` unless the theme's background has artwork down one side, so
@@ -67,12 +74,31 @@ is the space under the text on title and section slides, and
 `--section-number-gap` the space between a section's number and its title
 (`auto` pins the number to the top of the slide).
 
+The footer line: `--footer-offset` is its distance from the bottom edge,
+`--footer-size` and `--footer-color` its text, and `--footer-label` and
+`--footer-number` are `block` or `none` to show or hide the deck's label and
+the slide number.
+
+## Bullets
+
+Plain lists (`<ul>` with no class) draw their bullet as a shape, one set of
+tokens per level: `--bullet-width`, `--bullet-height`, `--bullet-radius`,
+`--bullet-top` (down from the top of the first line), `--bullet-color`, and
+`--bullet-indent` (bullet to text). A dash is wide and thin, a dot is square
+with a pill radius, a square has no radius. `--bullet-char` holds a character
+to use instead; the width and height are then `0px`. The second level has the
+same set as `--bullet-2-*`. To draw a matching bullet on a custom list, use
+the same tokens.
+
 ## Background
 
 Set by the theme, not by slides. `--bg-image` is the picture or gradient behind
 a slide (`none` in a flat theme) and `--bg-panel` the translucent panel behind
 the text when that picture is too busy to read over. A slide chooses with an
-attribute instead: `data-bg="title"`, `"section"`, `"closing"` or `"none"`.
+attribute instead: `data-bg="title"`, `"section"`, `"closing"`, `"none"`, or a
+name the theme lists. Each picture file is held in a token of its own
+(`--bg-content`, `--bg-title`, `--bg-<name>`); the build sets the ones a deck
+does not use to `none`.
 
 ## Shape
 
