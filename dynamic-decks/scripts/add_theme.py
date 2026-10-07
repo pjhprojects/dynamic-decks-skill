@@ -297,6 +297,7 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
 
     # Footer label and slide number: where they sit, and whether the template shows them at all
     on_master = [ET.fromstring(z.read(part)) for part in _master.slides_on(z, master_part)]
+    spec["bullets"] = _master.bullets(master, layout_xml.get("content"), (cx, cy), resolve)
     spec["footer"] = _master.footer(master, layout_xml.get("content"), (cx, cy), px_per_pt, resolve, on_master)
     aligns = {kind: v["title_align"] for kind, v in per_kind.items()}
     if set(aligns.values()) != {"start"}:
@@ -574,6 +575,7 @@ GROUPS = [
     ("Type: rhythm", r"--(leading|tracking)-"),
     ("Spacing scale", r"--space-"),
     ("Frame: where the title sits, the margins, the footer", r"--(frame|title|eyebrow|footer|hero|section)-"),
+    ("Bullets: a drawn shape for each of two levels", r"--bullet-"),
     ("Background picture, and a panel behind the text when the picture is busy", r"--bg-"),
     ("Shape", r"--(radius|stroke|shadow)-"),
     ("Icons", r"--icon-"),
@@ -603,6 +605,41 @@ PANEL_CSS = """/* The panel behind the text on a picture too busy to read over. 
 :where(.slide[data-layout="title"], .slide[data-layout="section"])::before { bottom: calc(var(--hero-bottom, var(--space-7)) - var(--space-5)); }
 :where(.slide[data-layout="full-bleed"])::before { content: none; }
 """
+
+
+def bullet_tokens(level: int, bullet: dict, bg: str, mode: str) -> dict[str, str]:
+    """Tokens that draw one level's bullet. {} leaves the built-in dash as it is."""
+    prefix = "--bullet-" if level == 1 else "--bullet-2-"
+    shape = bullet.get("shape") or "dot"
+    scale = max(0.5, min(2.0, float(bullet.get("scale") or 1)))
+    t: dict[str, str] = {}
+    if shape in ("dot", "square", "picture"):
+        side = f"{round(0.3 * scale, 2):g}em"
+        t.update({"char": '""', "width": side, "height": side, "radius": "var(--radius-pill)" if shape != "square" else "0px",
+                  "top": f"calc((1lh - {side}) / 2)"})
+    elif shape == "dash":
+        t.update({"char": '""', "width": f"{round(0.5 * scale, 2):g}em", "height": "var(--stroke-thin)", "radius": "var(--radius-pill)",
+                  "top": "calc((1lh - var(--stroke-thin)) / 2)"})
+    elif shape == "char" and bullet.get("char"):
+        t.update({"char": json.dumps(str(bullet["char"])[:2], ensure_ascii=False), "width": "0px", "height": "0px", "radius": "0px", "top": "0px"})
+    elif shape == "none":
+        t.update({"char": '""', "width": "0px", "height": "0px", "radius": "0px", "top": "0px"})
+    else:                                         # numbering, or something not understood: the built-in bullet stays
+        return {}
+    if bullet.get("color"):
+        try:
+            t["color"] = ensure_contrast(hexc(bullet["color"]), bg, 3.0, prefer="darker" if mode == "light" else "lighter")
+        except ValueError:
+            pass
+    elif bullet.get("text_color"):
+        t["color"] = "var(--color-text)" if level == 1 else "var(--color-text-muted)"
+    out = {prefix + key: value for key, value in t.items()}
+    if level == 1:
+        if shape == "none":
+            out["--bullet-indent"] = "0px"
+        elif bullet.get("indent"):
+            out["--bullet-indent"] = f"{max(44 if shape == 'char' else 28, min(80, int(bullet['indent'])))}px"
+    return out
 
 
 def footer_css(label_side: str | None, number_side: str | None, number_first: bool = False) -> str:
@@ -774,6 +811,23 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             del layout_rules[kind]["--hero-justify"]
         if not layout_rules[kind]:
             del layout_rules[kind]
+
+    # Bullets: the shape, color and indent of the first two levels
+    levels = [dict(b) for b in (spec.get("bullets") or []) if isinstance(b, dict)][:2]
+    if getattr(args, "bullet", None):
+        levels = [dict(levels[0] if levels else {}, shape=args.bullet, char=None)] + levels[1:]
+    drawn = []
+    for n, bullet in enumerate(levels, 1):
+        made = bullet_tokens(n, bullet, bg, base_mode)
+        tokens.update(made)
+        if bullet.get("note"):
+            notes.append(f"level {n} bullets in the template are {bullet['note']}")
+        if made:
+            what = {"char": f"\"{bullet.get('char')}\"", "none": "none", "picture": "a dot"}.get(bullet["shape"], f"a {bullet['shape']}")
+            drawn.append(f"level {n} {what}" + (f" in {made[('--bullet-' if n == 1 else '--bullet-2-') + 'color']}"
+                                                if bullet.get("color") and ("--bullet-" if n == 1 else "--bullet-2-") + "color" in made else ""))
+    if drawn and spec.get("source"):
+        notes.append("bullets follow the template: " + ", ".join(drawn))
 
     # Footer: which of the label and the slide number show, where, how big and in what color
     foot = {key: dict((spec.get("footer") or {}).get(key) or {}) for key in ("label", "number")}
@@ -947,6 +1001,9 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         vt = color_tokens(nbg, ntext, nacc, nacc2, nchart, other, notes, inverse_bg, None)
         if title is not None:
             vt["--title-color"] = "var(--color-text)"
+        for fixed in ("--footer-color", "--bullet-color", "--bullet-2-color"):    # a fixed color has to read on the other background too
+            if tokens.get(fixed, "").startswith("#"):
+                vt[fixed] = ensure_contrast(tokens[fixed], nbg, 3.0, prefer="darker" if other == "light" else "lighter")
         blocks.append(format_block(f':root[data-variant="{other}"]', vt))
         variants.append(other)
         notes.append(f"the {other} variant was derived automatically from the {base_mode} one; review it")
@@ -1216,6 +1273,8 @@ def main() -> None:
         p.add_argument("--shape", choices=sorted(SHAPES), help="corner style (default soft)")
         p.add_argument("--title-align", choices=("left", "center", "right"),
                        help="align titles on every kind of slide (from-pptx: overrides what the template says)")
+        p.add_argument("--bullet", choices=("dash", "dot", "square", "none"),
+                       help="shape of first-level bullets (from-pptx: overrides the template; default elsewhere: dash)")
         p.add_argument("--slide-number", choices=("left", "center", "right", "off"),
                        help="where the slide number sits in the footer, or off to hide it (from-pptx: overrides the template)")
         p.add_argument("--footer-label", choices=("left", "center", "right", "off"),

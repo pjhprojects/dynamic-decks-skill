@@ -77,6 +77,17 @@ The footer line: `--footer-offset` is its distance from the bottom edge,
 `--footer-number` are `block` or `none` to show or hide the deck's label and
 the slide number.
 
+## Bullets
+
+Plain lists (`<ul>` with no class) draw their bullet as a shape, one set of
+tokens per level: `--bullet-width`, `--bullet-height`, `--bullet-radius`,
+`--bullet-top` (down from the top of the first line), `--bullet-color`, and
+`--bullet-indent` (bullet to text). A dash is wide and thin, a dot is square
+with a pill radius, a square has no radius. `--bullet-char` holds a character
+to use instead; the width and height are then `0px`. The second level has the
+same set as `--bullet-2-*`. To draw a matching bullet on a custom list, use
+the same tokens.
+
 ## Background
 
 Set by the theme, not by slides. `--bg-image` is the picture or gradient behind

@@ -172,4 +172,50 @@ with sync_playwright() as p:
     t.ok("a hidden number and label are not drawn", not f["number"]["shown"] and not f["label"]["shown"], f)
     browser.close()
 
+# ---- bullets -----------------------------------------------------------------------------
+proc, brand, css, meta = make("template-brand.pptx", "brand-bullets")
+t.ok("a square bullet in the brand color is carried", token(css, "--bullet-width") == "0.3em" and token(css, "--bullet-height") == "0.3em"
+     and token(css, "--bullet-radius") == "0px" and token(css, "--bullet-color") == "#C8102E", token(css, "--bullet-radius") + " " + token(css, "--bullet-color"))
+t.ok("the second level's dash is carried", token(css, "--bullet-2-width") == "0.5em" and token(css, "--bullet-2-height") == "var(--stroke-thin)")
+t.ok("the indent comes from the template", token(css, "--bullet-indent") == "45px", token(css, "--bullet-indent"))
+t.ok("the report says what the bullets are", "bullets follow the template: level 1 a square in #C8102E, level 2 a dash" in proc.stdout)
+t.ok("a fixed bullet color is checked against the dark variant too", token(css, "--bullet-color", ':root[data-variant="dark"]').startswith("#"))
+proc, flat, css, meta = make("template.pptx", "default-bullets")
+t.ok("PowerPoint's default dot takes the text color", token(css, "--bullet-radius") == "var(--radius-pill)" and token(css, "--bullet-width") == "0.3em"
+     and token(css, "--bullet-color") == "var(--color-text)", token(css, "--bullet-color"))
+proc, forced, css, meta = make("template.pptx", "forced-bullets", "--bullet", "dash")
+t.ok("--bullet overrides the template", token(css, "--bullet-width") == "0.5em", token(css, "--bullet-width"))
+proc = run("add_theme.py", "new", "--name", "no-bullets", "--accent", "#2B6CF0", "--bullet", "none", env=ENV)
+css = (lib / "themes" / "no-bullets" / "theme.css").read_text(encoding="utf-8")
+t.ok("a theme can have no bullets at all", token(css, "--bullet-width") == "0px" and token(css, "--bullet-indent") == "0px")
+proc = run("add_theme.py", "new", "--name", "plain", "--accent", "#2B6CF0", env=ENV)
+css = (lib / "themes" / "plain" / "theme.css").read_text(encoding="utf-8")
+t.ok("a theme that says nothing keeps the built-in dash", token(css, "--bullet-width") == "var(--space-4)" and token(css, "--bullet-color") == "var(--color-accent)")
+
+import sys  # noqa: E402
+
+sys.path.insert(0, str(FIXTURES.parent.parent / "dynamic-decks" / "scripts"))
+import _master  # noqa: E402
+
+shape = _master._bullet_shape
+t.ok("symbol-font bullets are read as the shapes they draw",
+     shape("\u00a7", "Wingdings")[0] == "square" and shape("\uf0a7", "Wingdings")[0] == "square" and shape("\uf0b7", "Symbol")[0] == "dot"
+     and shape("o", "Courier New")[0] == "dot" and shape("\u00d8", "Wingdings")[:2] == ("char", "\u27a2"))
+t.ok("an ordinary character is kept as a character", shape("\u2192", "Arial") == ("char", "\u2192", True))
+t.ok("a symbol nobody can name falls back to a dot and says so", shape("\uf0e3", "Wingdings") == ("dot", None, False))
+
+BULLET = """() => {
+  const li = Deck.slides.find((x) => x.dataset.layout === 'bullets').querySelector('.slide-body ul > li');
+  const b = getComputedStyle(li, '::before'), r = (v) => Math.round(parseFloat(v));
+  return { width: r(b.width), height: r(b.height), radius: b.borderTopLeftRadius, color: b.backgroundColor, pad: r(getComputedStyle(li).paddingLeft) };
+}"""
+deck = OUT / "master-bullets.html"
+build(STARTER_SRC, deck, "--theme", "brand-bullets", env=ENV)
+with sync_playwright() as p:
+    browser, page = open_deck(p, deck)
+    b = page.evaluate(BULLET)
+    t.ok("in the deck, bullets are red squares at the template's indent",
+         b["width"] == b["height"] and 8 <= b["width"] <= 18 and b["radius"] == "0px" and b["color"] == "rgb(200, 16, 46)" and b["pad"] == 45, b)
+    browser.close()
+
 t.done()

@@ -248,3 +248,101 @@ def footer(master, layout, size: tuple[int, int], px_per_pt: float, resolve, sli
             entry["offset"] = round(1080 - (box[1] + box[3] / 2) - text / 2)
         out[key] = entry
     return out
+
+
+# --------------------------------------------------------------------------
+# Bullets
+# --------------------------------------------------------------------------
+DOTS = set("•●·∙⦁◦○⚫⚪")
+SQUARES = set("▪■□◼◾▫◻⬛❒")
+DASHES = set("–—-‒−―")
+# Symbol fonts keep their pictures at ordinary letters (or the same letters moved up to U+F0xx).
+SYMBOL_FONTS = {
+    "wingdings": {"§": "square", "n": "square", "q": "square", "l": "dot", "Ø": "➢", "ü": "✓",
+                  "v": "◆", "è": "→", "ð": "→", "à": "→"},
+    "wingdings 2": {"£": "square", "\u0097": "dot", "¡": "square"},
+    "wingdings 3": {"}": "▶", "u": "▶", "\u0084": "▶"},
+    "symbol": {"·": "dot", "¾": "dash"},
+    "webdings": {"=": "square", "4": "▶"},
+    "courier new": {"o": "dot"},
+}
+
+
+def _bullet_shape(char: str, font: str) -> tuple[str, str | None, bool]:
+    """(shape, character, understood) for a template's bullet character in its font."""
+    code = ord(char[0]) if char else 0
+    plain = chr(code - 0xF000) if 0xF000 <= code <= 0xF0FF else char[:1]     # symbol fonts' private-use copies
+    table = SYMBOL_FONTS.get((font or "").strip().lower())
+    if table is not None:
+        hit = table.get(plain)
+        if hit in ("dot", "square", "dash"):
+            return hit, None, True
+        if hit:
+            return "char", hit, True
+        return "dot", None, False                # a picture this table does not know
+    if plain in DOTS:
+        return "dot", None, True
+    if plain in SQUARES:
+        return "square", None, True
+    if plain in DASHES:
+        return "dash", None, True
+    if 0xE000 <= code <= 0xF8FF or not plain.strip():
+        return "dot", None, False
+    return "char", plain, True
+
+
+def bullets(master, layout, size: tuple[int, int], resolve) -> list[dict]:
+    """The bullet at the first two levels of body text.
+
+    Each entry has `shape` (dot, square, dash, char, none, number, picture),
+    `char` (for char), `color` (a plain color, or None when the bullet takes
+    the text's), `scale` (its size against the text, 1 = PowerPoint's own),
+    `indent` (stage px from the bullet to the text) and `note` when the
+    template's bullet could not be carried as it is.
+    """
+    bodies = placeholders(layout, BODY_TYPES)[:1] + placeholders(master, ("body",))[:1]
+    out = []
+    for level in (1, 2):
+        sources = [lvl for lvl in (_level(sp, level) for sp in bodies) if lvl is not None]
+        style = master.find(f"p:txStyles/p:bodyStyle/a:lvl{level}pPr", NS) if master is not None else None
+        if style is not None:
+            sources.append(style)
+        entry: dict = {"shape": "dot", "char": None, "color": None, "text_color": True, "scale": 1.0, "indent": None}
+        for src in sources:                       # the first source that says what the bullet is, decides
+            none, char = src.find("a:buNone", NS), src.find("a:buChar", NS)
+            if none is not None:
+                entry["shape"] = "none"
+            elif char is not None:
+                font = next((f.get("typeface", "") for f in (s.find("a:buFont", NS) for s in sources) if f is not None), "")
+                shape, glyph, understood = _bullet_shape(char.get("char", ""), font)
+                entry.update(shape=shape, char=glyph)
+                if not understood:
+                    entry["note"] = f"a symbol from the font {font or 'of the text'} that is not carried over; a dot is used"
+            elif src.find("a:buAutoNum", NS) is not None:
+                entry.update(shape="number", note="numbering; lists stay bulleted unless a slide is written as a numbered list")
+            elif src.find("a:buBlip", NS) is not None:
+                entry.update(shape="picture", note="a picture; a dot is used")
+            else:
+                continue
+            break
+        for src in sources:
+            color = src.find("a:buClr", NS)
+            if color is not None:
+                scheme = color.find("a:schemeClr", NS)
+                entry["color"] = None if scheme is not None and len(list(scheme)) else resolve(color)
+                entry["text_color"] = entry["color"] is None and color.find("a:srgbClr", NS) is None and scheme is None
+                break
+        for src in sources:
+            pct = src.find("a:buSzPct", NS)
+            if pct is not None and pct.get("val", "").rstrip("%").isdigit():
+                value = int(pct.get("val").rstrip("%"))
+                entry["scale"] = max(0.5, min(2.0, value / (100000 if value > 400 else 100)))
+                break
+        for src in sources:
+            if src.get("marL", "").lstrip("-").isdigit():
+                left = int(src.get("marL")) * 1920 / size[0]
+                hang = abs(int(src.get("indent", "0") or 0)) * 1920 / size[0] if src.get("indent", "").lstrip("-").isdigit() else left
+                entry["indent"] = round(min(left, hang) if level == 1 else hang)
+                break
+        out.append(entry)
+    return out

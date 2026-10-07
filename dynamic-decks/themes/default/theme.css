@@ -188,6 +188,21 @@
   --footer-label: block;           /* block or none: the deck's label in the footer */
   --footer-number: block;          /* block or none: the slide number */
 
+  /* Bullets: a drawn shape for each of two levels (a dash here; a dot is equal width and height with a pill radius) */
+  --bullet-char: "";               /* a character instead of a shape: set this, and width and height to 0px */
+  --bullet-width: var(--space-4);
+  --bullet-height: var(--stroke-base);
+  --bullet-radius: var(--radius-pill);
+  --bullet-top: 0.52em;            /* from the top of the first line down to the shape */
+  --bullet-color: var(--color-accent);
+  --bullet-indent: var(--space-6); /* from the bullet to the text's left edge */
+  --bullet-2-char: "";
+  --bullet-2-width: var(--space-3);
+  --bullet-2-height: var(--stroke-thin);
+  --bullet-2-radius: var(--radius-pill);
+  --bullet-2-top: 0.52em;
+  --bullet-2-color: var(--color-text-subtle);
+
   /* Shape */
   --radius-sm: 6px;
   --radius-md: 14px;

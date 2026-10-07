@@ -68,6 +68,8 @@
   --title-color: var(--color-inverse-text);
   --eyebrow-color: var(--color-inverse-accent);
   --footer-color: var(--color-inverse-muted);
+  --bullet-color: var(--color-inverse-accent);
+  --bullet-2-color: var(--color-inverse-muted);
 }
 .slide[data-tone="surface"] { --color-bg: var(--color-surface); --color-surface: var(--color-surface-2); }
 .slide[data-tone="accent-soft"] { --color-bg: var(--color-accent-soft); --color-surface: var(--color-bg); }
@@ -212,15 +214,22 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
   max-width: 44ch;
   text-wrap: pretty;
 }
+:where(.slide) ul:not([class]) > li { padding-left: var(--bullet-indent, var(--space-6)); }
+/* The bullet is a drawn shape (a dash, a dot, a square), so it looks the same
+   in every font. A theme that wants a character instead sets --bullet-char
+   and a width and height of 0: the character then hangs from the box's corner
+   and the box itself paints nothing. */
 :where(.slide) ul:not([class]) > li::before {
-  content: "";
+  content: var(--bullet-char, "");
   position: absolute;
   left: 0;
-  top: 0.52em;
-  width: var(--space-4);
-  height: var(--stroke-base);
-  border-radius: var(--radius-pill);
-  background: var(--color-accent);
+  top: var(--bullet-top, 0.52em);
+  width: var(--bullet-width, var(--space-4));
+  height: var(--bullet-height, var(--stroke-base));
+  border-radius: var(--bullet-radius, var(--radius-pill));
+  background: var(--bullet-color, var(--color-accent));
+  color: var(--bullet-color, var(--color-accent));
+  white-space: nowrap;
 }
 :where(.slide) ol:not([class]) { counter-reset: deck-ol; }
 :where(.slide) ol:not([class]) > li { counter-increment: deck-ol; }
@@ -241,7 +250,15 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
   color: var(--color-text-muted);
 }
 :where(.slide) li > ul:not([class]) > li { padding-left: var(--space-5); }
-:where(.slide) li > ul:not([class]) > li::before { width: var(--space-3); height: var(--stroke-thin); background: var(--color-text-subtle); }
+:where(.slide) li > ul:not([class]) > li::before {
+  content: var(--bullet-2-char, "");
+  top: var(--bullet-2-top, 0.52em);
+  width: var(--bullet-2-width, var(--space-3));
+  height: var(--bullet-2-height, var(--stroke-thin));
+  border-radius: var(--bullet-2-radius, var(--radius-pill));
+  background: var(--bullet-2-color, var(--color-text-subtle));
+  color: var(--bullet-2-color, var(--color-text-subtle));
+}
 
 /* ---- 3. Layouts --------------------------------------------------------- */
 

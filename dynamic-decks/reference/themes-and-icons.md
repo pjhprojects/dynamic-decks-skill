@@ -147,6 +147,17 @@ override what the template says, and work on `new` and `from-spec` too. Tell the
 user when a part was hidden: a deck's `deck:footer` label will not appear in a
 theme that hides it.
 
+**Bullets.** The bullet at the first two levels of body text is read from the
+content layout, then the master's text box, then the master's body style: its
+character, its color, its size against the text and its indent. Dots, squares
+and dashes are drawn as shapes, so they look the same in every font. Symbol
+fonts are understood for the common cases (a Wingdings square, arrow or check;
+a Symbol dot); another ordinary character is kept as a character; anything
+else becomes a dot and is reported. A bullet with no color of its own takes
+the text color, as it does in PowerPoint. All of it lands in the `--bullet-*`
+tokens for level one and `--bullet-2-*` for level two. Picture bullets are not
+carried. `--bullet dash|dot|square|none` sets the first level by hand.
+
 ## Backgrounds that are pictures
 
 When a template's background is more than one flat color (a photo, a gradient,
