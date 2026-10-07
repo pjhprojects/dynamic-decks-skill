@@ -32,6 +32,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libreoffice-impress
+          soffice --version   # the tests skip their drawing part when this is missing, so fail here instead
       - name: Run the tests
         run: python tests/run_all.py
       - name: Package the skill
