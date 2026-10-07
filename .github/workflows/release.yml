@@ -32,7 +32,15 @@ jobs:
         run: python tests/run_all.py
       - name: Package the skill
         run: python tools/package.py
-      - name: Create the release
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/dynamic-decks.skill dist/dynamic-decks.zip --title "DynamicDecks $GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: |
+          # A release drafted on github.com already exists by the time this runs,
+          # so attach the files to it. A tag pushed from git has no release yet,
+          # so create one.
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/dynamic-decks.skill dist/dynamic-decks.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/dynamic-decks.skill dist/dynamic-decks.zip --title "DynamicDecks $GITHUB_REF_NAME" --generate-notes --verify-tag
+          fi

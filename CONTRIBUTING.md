@@ -60,8 +60,10 @@ that breaks one of them needs a very good reason.
 1. Update `VERSION` in `dynamic-decks/scripts/_deck.py` and add a section to
    `CHANGELOG.md`.
 2. Run the tests and `python tools/package.py`, and commit.
-3. Tag the commit `v<version>` and push the tag. The release workflow runs the
-   tests and attaches `dynamic-decks.skill` and `dynamic-decks.zip` to a GitHub release.
+3. Tag the commit `v<version>`, either by pushing the tag from git or by
+   publishing a release with that tag on github.com. The release workflow runs
+   the tests and attaches `dynamic-decks.skill` and `dynamic-decks.zip` to the
+   GitHub release, creating it if the tag came from git.
 
 ## Licensing of contributions
 
