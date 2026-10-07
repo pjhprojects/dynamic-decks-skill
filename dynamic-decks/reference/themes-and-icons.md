@@ -319,7 +319,11 @@ use `from-spec`; the keys are `name`, `label`, `colors` (`bg`, `text`, `accent`,
 `accent2`, `chart`, `inverse_bg`, `title`), `fonts` (`display`, `body`, `mono`,
 `dir`), `frame` (`x`, `top`, `title_size`, `title_weight`, `title_align`), `shape`, `logo`
 (`light`, `dark`), `icons`, `dark` (false to skip the second variant),
-`backgrounds` (`content`, `title`, `section`, `closing`: a picture file each).
+`backgrounds` (`content`, `title`, `section`, `closing`: a picture file each),
+`bullets` (a list for level one and two, each with `shape`: `dot`, `square`,
+`dash`, `char` or `none`, and optionally `char`, `color`, `indent`), `footer`
+(`number` and `label`, each with `shown` and `side`), `body` (`size_pt`, `line`).
+`frame` also takes `column_gap`.
 
 Colors that would be unreadable are adjusted and listed in the review notes,
 so tell the user when a brand color was changed and why.

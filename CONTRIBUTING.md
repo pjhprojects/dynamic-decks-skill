@@ -40,7 +40,10 @@ that breaks one of them needs a very good reason.
 7. **Scripts run on Python 3.9 with the standard library.** Pillow, Playwright,
    fontTools and LibreOffice are optional; a script that needs one says what it
    skipped.
-8. **A template's artwork is drawn, not reinterpreted.** A background that is
+8. **The built-in theme does not move.** A change to the engine or layouts
+   must leave the starter and showcase decks rendering as before unless the
+   change is the point; compare screenshots before and after.
+9. **A template's artwork is drawn, not reinterpreted.** A background that is
    more than a flat color is kept as a picture and measured once (text area,
    text color, calm or busy). Slides follow the stored measurements; nothing
    guesses at a picture when a deck is built.
@@ -58,10 +61,16 @@ that breaks one of them needs a very good reason.
   must pass the checks with no warnings, use only theme tokens, have a
   complete still frame, and carry the sentence someone could ask for it with.
 - `tests/fixtures/` holds a deliberately broken deck, PowerPoint templates and
-  a few icons used by the tests. The three `template-*.pptx` files (a photo
-  background, artwork made of shapes, a busy picture) are written by
-  `tests/fixtures/make_templates.py`, which needs `python-pptx`; run it only to
-  change them.
+  a few icons used by the tests. The `template-*.pptx` files (a photo
+  background, artwork made of shapes, a busy picture, a branded slide master,
+  two slide masters) are written by `tests/fixtures/make_templates.py`, which
+  needs `python-pptx`. Run it only to change them, and name the ones to
+  rewrite: `python tests/fixtures/make_templates.py brand`.
+- `dynamic-decks/scripts/_master.py` reads the slide master (which master,
+  title alignment, footer, bullets, body text) and `_backgrounds.py` the
+  backgrounds. Both return plain values; `add_theme.py` turns them into tokens
+  and rules. Something new read from a template goes in one of those two, with
+  a default token equal to the old behavior so existing themes do not change.
 - The background tests draw those templates with LibreOffice when it is
   installed (`soffice` on the PATH) and skip that part when it is not.
 
