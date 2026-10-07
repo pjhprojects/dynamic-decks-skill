@@ -158,6 +158,17 @@ the text color, as it does in PowerPoint. All of it lands in the `--bullet-*`
 tokens for level one and `--bullet-2-*` for level two. Picture bullets are not
 carried. `--bullet dash|dot|square|none` sets the first level by hand.
 
+**Body text.** The template's first-level body size is read and reported, but
+not copied. A PowerPoint slide is usually one text box set at 24 to 32pt (48
+to 64px on this stage); the layouts here put several blocks on a slide and set
+bullets at 44px, so copying the template's size would make them overflow.
+Instead the theme leans the same way: a template clearly below that range
+makes `--text-sm` to `--text-lg` up to 10% smaller, one above it up to 10%
+larger, and anything inside it changes nothing. Line spacing is carried when
+the template sets it (`--leading-snug`, `--leading-normal`). If a user wants
+body text as large as their template's, say what it costs: fewer words per
+slide, and edit the `--text-*` tokens in `theme.css` by hand.
+
 ## Backgrounds that are pictures
 
 When a template's background is more than one flat color (a photo, a gradient,

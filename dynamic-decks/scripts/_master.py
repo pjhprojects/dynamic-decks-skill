@@ -346,3 +346,36 @@ def bullets(master, layout, size: tuple[int, int], resolve) -> list[dict]:
                 break
         out.append(entry)
     return out
+
+
+# --------------------------------------------------------------------------
+# Body text
+# --------------------------------------------------------------------------
+def body_text(master, layout) -> dict:
+    """First-level body text: `size_pt` (points) and `line` (line spacing, 1 = PowerPoint's single).
+
+    Either is None when the template does not say. The content layout's text
+    box decides, then the master's, then the master's body style.
+    """
+    bodies = placeholders(layout, BODY_TYPES)[:1] + placeholders(master, ("body",))[:1]
+    sources = [lvl for lvl in (_level(sp) for sp in bodies) if lvl is not None]
+    style = master.find("p:txStyles/p:bodyStyle/a:lvl1pPr", NS) if master is not None else None
+    if style is not None:
+        sources.append(style)
+    size = None
+    for src in sources:
+        run = src.find("a:defRPr", NS)
+        if run is not None and run.get("sz", "").isdigit():
+            size = int(run.get("sz")) / 100
+            break
+    line = None
+    for src in sources:
+        pct, pts = src.find("a:lnSpc/a:spcPct", NS), src.find("a:lnSpc/a:spcPts", NS)
+        if pct is not None and pct.get("val", "").rstrip("%").isdigit():
+            value = int(pct.get("val").rstrip("%"))
+            line = value / (100000 if value > 400 else 100)
+            break
+        if pts is not None and pts.get("val", "").isdigit() and size:
+            line = int(pts.get("val")) / 100 / (size * 1.2)      # exact spacing in points, against single spacing
+            break
+    return {"size_pt": size, "line": round(line, 3) if line else None}

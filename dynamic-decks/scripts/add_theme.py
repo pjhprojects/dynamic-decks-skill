@@ -297,6 +297,7 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
 
     # Footer label and slide number: where they sit, and whether the template shows them at all
     on_master = [ET.fromstring(z.read(part)) for part in _master.slides_on(z, master_part)]
+    spec["body"] = _master.body_text(master, layout_xml.get("content"))
     spec["bullets"] = _master.bullets(master, layout_xml.get("content"), (cx, cy), resolve)
     spec["footer"] = _master.footer(master, layout_xml.get("content"), (cx, cy), px_per_pt, resolve, on_master)
     aligns = {kind: v["title_align"] for kind, v in per_kind.items()}
@@ -812,6 +813,40 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         if not layout_rules[kind]:
             del layout_rules[kind]
 
+    def px_of(name: str, default: int) -> int:
+        m = re.fullmatch(r"(-?\d+)px", tokens.get(name, ""))
+        return int(m.group(1)) if m else default
+
+    # Body text. PowerPoint sets one big text box per slide, usually at 24 to 32pt. The layouts here hold
+    # more than one block, so they keep their own sizes and only lean toward a template that is clearly
+    # smaller or larger than that: at most 10% either way.
+    body = spec.get("body") or {}
+    try:
+        size_pt = float(body.get("size_pt") or 0)
+    except (TypeError, ValueError):
+        size_pt = 0
+    if size_pt:
+        lean = max(0.9, size_pt / 24) if size_pt < 24 else (min(1.1, size_pt / 32) if size_pt > 32 else 1.0)
+        lean = round(lean, 2)
+        if lean != 1.0:
+            for name in ("--text-sm", "--text-base", "--text-md", "--text-lg"):
+                tokens[name] = f"{round(px_of(name, 0) * lean)}px"
+        if lean == 1.0:
+            notes.append(f"body text in the template is {size_pt:g}pt; the theme keeps its own text sizes, which fit more on a slide")
+        else:
+            most = ", the most the layouts allow" if lean in (0.9, 1.1) else ""
+            notes.append(f"body text in the template is {size_pt:g}pt, {'smaller' if lean < 1 else 'larger'} than usual; text sizes were "
+                         f"{'reduced' if lean < 1 else 'increased'} by {abs(round((lean - 1) * 100))}% (--text-sm to --text-lg){most}")
+    try:
+        line = float(body.get("line") or 0)
+    except (TypeError, ValueError):
+        line = 0
+    if line:
+        tokens["--leading-snug"] = f"{max(1.05, min(1.5, 1.22 * line)):.2f}"
+        tokens["--leading-normal"] = f"{max(1.2, min(1.7, 1.42 * line)):.2f}"
+        notes.append(f"line spacing follows the template ({round(line * 100)}% of single): --leading-snug {tokens['--leading-snug']}, "
+                     f"--leading-normal {tokens['--leading-normal']}")
+
     # Bullets: the shape, color and indent of the first two levels
     levels = [dict(b) for b in (spec.get("bullets") or []) if isinstance(b, dict)][:2]
     if getattr(args, "bullet", None):
@@ -871,10 +906,6 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
                 pass
     if said:
         notes.append("the footer follows the template: " + ", ".join(said))
-
-    def px_of(name: str, default: int) -> int:
-        m = re.fullmatch(r"(-?\d+)px", tokens.get(name, ""))
-        return int(m.group(1)) if m else default
 
     # Background pictures: the content one goes on :root, the others get a rule each in Decor
     saved: dict[str, str] = {}

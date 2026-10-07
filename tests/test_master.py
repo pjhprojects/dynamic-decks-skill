@@ -218,4 +218,38 @@ with sync_playwright() as p:
          b["width"] == b["height"] and 8 <= b["width"] <= 18 and b["radius"] == "0px" and b["color"] == "rgb(200, 16, 46)" and b["pad"] == 45, b)
     browser.close()
 
+# ---- body text ---------------------------------------------------------------------------
+def with_body_size(points: int):
+    """The brand template with another first-level body size."""
+    out = OUT / f"template-body-{points}.pptx"
+    with zipfile.ZipFile(FIXTURES / "template-brand.pptx") as zin, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.namelist():
+            data = zin.read(item)
+            if item == "ppt/slideMasters/slideMaster1.xml":
+                data = data.replace(b'<a:defRPr sz="2400" kern="1200">', f'<a:defRPr sz="{points * 100}" kern="1200">'.encode())
+            zout.writestr(item, data)
+    return out
+
+
+proc, brand, css, meta = make("template-brand.pptx", "brand-body")
+t.ok("body text in the usual range leaves the type scale alone", token(css, "--text-md") == "44px" and token(css, "--text-base") == "36px"
+     and "body text in the template is 24pt; the theme keeps its own text sizes" in proc.stdout, token(css, "--text-md"))
+t.ok("line spacing follows the template", token(css, "--leading-snug") == "1.10" and token(css, "--leading-normal") == "1.28"
+     and "line spacing follows the template (90% of single)" in proc.stdout, token(css, "--leading-snug"))
+proc = run("add_theme.py", "from-pptx", with_body_size(18), "--name", "body-small", env=ENV)
+css = (lib / "themes" / "body-small" / "theme.css").read_text(encoding="utf-8")
+t.ok("a template with small body text makes the theme's text 10% smaller, no more",
+     [token(css, n) for n in ("--text-sm", "--text-base", "--text-md", "--text-lg")] == ["27px", "32px", "40px", "49px"]
+     and "reduced by 10%" in proc.stdout and "the most the layouts allow" in proc.stdout, token(css, "--text-md"))
+t.ok("display sizes and the smallest size are not touched", token(css, "--text-xs") == "24px" and token(css, "--text-display") == "164px")
+proc = run("add_theme.py", "from-pptx", with_body_size(22), "--name", "body-22", env=ENV)
+css = (lib / "themes" / "body-22" / "theme.css").read_text(encoding="utf-8")
+t.ok("a template a little under the range leans a little", token(css, "--text-md") == "40px" and "reduced by 8%" in proc.stdout, token(css, "--text-md"))
+proc = run("add_theme.py", "from-pptx", with_body_size(40), "--name", "body-large", env=ENV)
+css = (lib / "themes" / "body-large" / "theme.css").read_text(encoding="utf-8")
+t.ok("a template with large body text makes the theme's text 10% larger, no more", token(css, "--text-md") == "48px" and "increased by 10%" in proc.stdout,
+     token(css, "--text-md"))
+proc, flat, css, meta = make("template.pptx", "default-body")
+t.ok("a template that sets no line spacing keeps the built-in one", token(css, "--leading-snug") == "1.22" and "line spacing" not in proc.stdout)
+
 t.done()
