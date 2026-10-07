@@ -305,7 +305,8 @@ def brand() -> None:
     side._element.find(f"{{{P}}}cSld").set("name", "Sidebar")
     add_shape(side, "rect", 0.72, 0, 0.28, 1, "C8102E")
     place(side, ("title",), 0.07, 0.09, 0.58, 0.14)
-    place(side, (None,), 0.07, 0.27, 0.58, 0.57)
+    place(side, (None,), 0.07, 0.27, 0.58, 0.3)
+    place(side, ("body",), 0.07, 0.6, 0.58, 0.24)
     prs.save(HERE / "template-brand.pptx")
 
 

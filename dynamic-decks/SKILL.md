@@ -272,6 +272,12 @@ records where text may go on it and in which color. It is exact when
 LibreOffice is installed; say so when it is not. In such a theme the text area
 can be narrow, so read the notes the command prints before writing slides.
 
+The template's slide master is read for more than colors: which master to use
+when a file has several, title alignment, the footer and slide number, bullets,
+body text, and every layout with a look of its own. Those other layouts become
+backgrounds a slide asks for by name (`data-bg="quote"`); the names are in the
+theme's `theme.json`, so read it before writing slides in an imported theme.
+
 Each prints what it could not carry over or had to adjust. Relay that list to
 the user in plain words, show them the sample deck in their theme, and treat
 the first result as a draft to review together. Two things are the user's to

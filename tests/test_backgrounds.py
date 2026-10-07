@@ -44,8 +44,9 @@ def px(css: str, token: str, block: str = "") -> int:
 proc, photo, css, meta = make("template-photo.pptx", "photo", NO_LO)
 bgs = meta.get("backgrounds", {})
 t.ok("a template with a picture background becomes a theme", proc.returncode == 0 and bool(css), proc.stdout[-400:] + proc.stderr[-400:])
-t.ok("the content picture is kept in the theme", (photo / "backgrounds" / "content.webp").is_file()
-     and '--bg-image: url("backgrounds/content.webp")' in css)
+t.ok("the content picture is kept in the theme, declared once and used by name", (photo / "backgrounds" / "content.webp").is_file()
+     and '--bg-content: url("backgrounds/content.webp")' in css and "--bg-image: var(--bg-content)" in css
+     and css.count('url("backgrounds/content.webp")') == 1)
 t.ok("the margins keep text off the artwork", px(css, "--frame-right") >= 700 and 64 <= px(css, "--frame-left") <= 160,
      f"left {px(css, '--frame-left')} right {px(css, '--frame-right')}")
 content = bgs.get("content", {})
@@ -79,10 +80,28 @@ hero = bgs.get("title", {}).get("safe") or [0, 0, 0, 0]
 t.ok("the title slide's panel is big enough for a title", hero[2] >= 1100 and hero[3] >= 700, hero)
 t.ok("the report mentions the panel", "panel behind the text" in proc.stdout)
 
+# ---- more layouts as named backgrounds, without LibreOffice ------------------------
+proc, brand, css, meta = make("template-brand.pptx", "brand", NO_LO)
+bgs = meta.get("backgrounds", {})
+t.ok("a layout with its own flat color becomes a named background", bgs.get("dark-content", {}).get("flat") == "#1B1B1B"
+     and bgs["dark-content"].get("extra") is True and bgs["dark-content"].get("from") == "Dark Content", bgs.get("dark-content"))
+t.ok("a layout with its own gradient becomes one too", bgs.get("quote", {}).get("picture", "").startswith("linear-gradient(120deg, #0B2545")
+     and bgs["quote"].get("ink") == "light", bgs.get("quote"))
+t.ok("layouts that look like the content one are not listed", set(bgs) == {"content", "title", "section", "dark-content", "quote"}
+     or set(bgs) == {"dark-content", "quote", "content"} or {k for k, e in bgs.items() if e.get("extra")} == {"dark-content", "quote"}, sorted(bgs))
+rule_dark = re.search(r'\.slide\[data-bg="dark-content"\]:where\(:not\(\[data-tone\]\)\) \{([^}]*)\}', css)
+t.ok("each gets a rule with the colors that read on it", rule_dark is not None and "--color-bg: #1B1B1B" in rule_dark.group(1)
+     and "--color-text: #FFFFFF" in rule_dark.group(1) and "--title-color: var(--color-text)" in rule_dark.group(1))
+t.ok("the report names them for the slides to ask for", 'data-bg="dark-content", data-bg="quote"' in proc.stdout
+     and 'Flat backgrounds from other layouts: data-bg="dark-content"' in proc.stdout, proc.stdout[-600:])
+t.ok("the two-content layout's gap is carried", "--column-gap: 106px" in css, re.findall(r"--column-gap: [^;]+", css))
+proc, lean_theme, css, meta = make("template-brand.pptx", "brand-four", NO_LO, "--no-extra-backgrounds")
+t.ok("--no-extra-backgrounds keeps to the four kinds of slide", proc.returncode == 0 and 'data-bg="quote"' not in css and "backgrounds" not in meta, sorted(meta))
+
 # ---- switches -------------------------------------------------------------------
 proc, never, css, meta = make("template-photo.pptx", "photo-flat", NO_LO, "--backgrounds", "never")
 t.ok("--backgrounds never gives a flat theme", proc.returncode == 0 and "backgrounds" not in meta and not (never / "backgrounds").exists()
-     and "--bg-image: url(" not in css and "data-bg" not in css and meta.get("variants") == ["light", "dark"], proc.stdout[-300:])
+     and 'url("backgrounds/' not in css and "data-bg" not in css and meta.get("variants") == ["light", "dark"], proc.stdout[-300:])
 proc, flat, css, meta = make("template.pptx", "flat", NO_LO)
 t.ok("a template with a flat background is unchanged by all this", "backgrounds" not in meta and not (flat / "backgrounds").exists()
      and meta.get("variants") == ["light", "dark"] and (flat / "logo.png").is_file())
@@ -123,7 +142,27 @@ proc2 = build(DECK, again, "--theme", OUT / "bg-recovered", env=NO_LO)
 t.ok("a theme recovered from a deck still carries its pictures", proc.returncode == 0 and proc2.returncode == 0
      and again.read_text(encoding="utf-8").count("data:image/webp;base64,") >= 2, proc.stdout[-200:] + proc2.stdout[-200:])
 busy_deck = OUT / "bg-busy.html"
-build(DECK, busy_deck, "--theme", "busy", env=NO_LO)
+proc = build(DECK, busy_deck, "--theme", "busy", env=NO_LO)
+t.ok("a picture shared by several kinds of slide is in the deck once", busy_deck.read_text(encoding="utf-8").count("data:image/webp;base64,") == 1)
+
+plain = OUT / "bg-content-only.src.html"
+source = DECK.read_text(encoding="utf-8")
+keep = [m for m in re.findall(r"<section.*?</section>", source, flags=re.S) if 'id="s-content"' in m or 'id="s-none"' in m]
+plain.write_text(re.sub(r"<section.*</section>", "\n".join(keep), source, flags=re.S), encoding="utf-8")
+lean = OUT / "bg-content-only.html"
+proc = build(plain, lean, "--theme", "photo", env=NO_LO)
+html = lean.read_text(encoding="utf-8") if lean.is_file() else ""
+t.ok("a deck with no title slide leaves the title picture out", proc.returncode == 0 and html.count("data:image/webp;base64,") == 1
+     and "--bg-title: none" in html.replace(":none", ": none") and "not used by this deck and were left out: title" in proc.stdout, proc.stdout[-400:])
+t.ok("and is smaller for it", lean.stat().st_size < deck.stat().st_size - 20000, (lean.stat().st_size, deck.stat().st_size))
+titled = OUT / "bg-title-later-in.html"             # the built deck, edited, rebuilt where its theme is not installed
+titled.write_text(html.replace('data-bg="none"', 'data-bg="title"'), encoding="utf-8")
+proc = build(titled, OUT / "bg-title-later.html", env={**NO_LO, "DYNAMIC_DECKS_HOME": str(OUT / "no-such-library")})
+t.ok("asking later for a picture the deck left out is explained", "the picture for it was left out" in proc.stdout, proc.stdout[-500:])
+odd = OUT / "bg-unknown.src.html"
+odd.write_text(source.replace('data-bg="none"', 'data-bg="poster"'), encoding="utf-8")
+proc = build(odd, OUT / "bg-unknown.html", "--theme", "photo", env=NO_LO)
+t.ok("a background the theme does not have is reported by name", 'data-bg="poster" is not a background in the theme' in proc.stdout, proc.stdout[-400:])
 
 STATE = """(id) => {
   const s = document.getElementById(id), cs = getComputedStyle(s), panel = getComputedStyle(s, '::before');
@@ -207,6 +246,36 @@ t.ok("a flat template drawn by LibreOffice is still a flat theme", "backgrounds"
      proc.stdout[-300:])
 proc, kept, css, meta = make("template.pptx", "flat-kept", WITH_LO, "--backgrounds", "always")
 t.ok("--backgrounds always is accepted", proc.returncode == 0, proc.stdout[-300:] + proc.stderr[-300:])
+
+proc, brand, css, meta = make("template-brand.pptx", "brand-drawn", WITH_LO)
+bgs = meta.get("backgrounds", {})
+side = bgs.get("sidebar", {})
+t.ok("a layout with its own artwork is drawn and named", side.get("drawn_by_libreoffice") is True and side.get("extra") is True
+     and (brand / "backgrounds" / "sidebar.webp").is_file() and '--bg-sidebar: url("backgrounds/sidebar.webp")' in css, sorted(bgs))
+t.ok("its text area keeps clear of its artwork", bool(side.get("safe")) and side["safe"][0] + side["safe"][2] <= 0.72 * 1920 + 2, side.get("safe"))
+t.ok("the eight layouts that look like the content one add nothing", {k for k, e in bgs.items() if e.get("extra")} == {"dark-content", "quote", "sidebar"},
+     sorted(bgs))
+more_deck = OUT / "bg-more.html"
+more_src = OUT / "bg-more.src.html"
+more_src.write_text(DECK.read_text(encoding="utf-8").replace('data-bg="none" id="s-none"', 'data-bg="sidebar" id="s-none"')
+                    .replace('data-bg="title" id="s-optin"', 'data-bg="dark-content" id="s-optin"'), encoding="utf-8")
+proc = build(more_src, more_deck, "--theme", "brand-drawn", env=WITH_LO)
+with sync_playwright() as p:
+    browser = launch(p)
+    page = browser.new_page(viewport={"width": 1920, "height": 1080})
+    page.goto(more_deck.as_uri())
+    page.wait_for_function("document.documentElement.classList.contains('deck-ready') && !!window.Deck")
+    page.evaluate("Deck.rest(true)")
+    side_slide, dark_slide, plain_slide = (page.evaluate(STATE, name) for name in ("s-none", "s-optin", "s-content"))
+    bg_color = page.evaluate("getComputedStyle(document.getElementById('s-optin')).backgroundColor")
+    t.ok('data-bg="sidebar" shows that layout\'s picture and keeps text off the band', side_slide["image"].startswith("url(")
+         and side_slide["right"] <= 0.72 * 1920 + 2 and plain_slide["image"] == "none", (side_slide["picture"][:30], side_slide["right"]))
+    t.ok('data-bg="dark-content" gives a dark slide with light text', bg_color == "rgb(27, 27, 27)" and dark_slide["lightText"], bg_color)
+    browser.close()
+proc = run("render.py", more_deck, "--out", OUT / "bg-more-render", "--json")
+report = json.loads(proc.stdout) if proc.stdout.strip().startswith("{") else {"slides": [{"number": 0, "low_contrast": "no report"}]}
+low = {s["number"]: s["low_contrast"] for s in report["slides"] if s.get("low_contrast") and s["number"] != 6}
+t.ok("text reads well on every one of them", not low, low)
 
 starter = OUT / "bg-starter-shapes.html"
 proc = build(STARTER_SRC, starter, "--theme", "shapes", env=WITH_LO)

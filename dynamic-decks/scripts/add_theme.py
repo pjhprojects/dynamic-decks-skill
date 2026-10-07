@@ -106,7 +106,7 @@ def _rels(z: zipfile.ZipFile, part: str) -> dict[str, tuple[str, str]]:
 
 
 def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "auto",
-              master_choice: str | None = None) -> tuple[dict, list[str]]:
+              master_choice: str | None = None, more_backgrounds: bool = True) -> tuple[dict, list[str]]:
     """Pull brand values out of a .pptx or .potx. Returns (spec, notes)."""
     notes: list[str] = []
     try:
@@ -183,11 +183,11 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
 
     # Backgrounds: each kind of slide drawn empty, then measured (see _backgrounds.py)
     light = scheme.get(cmap.get("bg1", "lt1"), "#FFFFFF")
-    kinds, bg_notes = _backgrounds.from_template(
+    kinds, more_kinds, bg_notes = _backgrounds.from_template(
         path, z, master_part, (cx, cy), resolve,
         dark_text=text if luminance(text) < 0.2 else "#111111",
         light_text=light if luminance(light) > 0.8 else "#FFFFFF",
-        mode=backgrounds, work=(extract_to / "backgrounds") if extract_to else None)
+        mode=backgrounds, work=(extract_to / "backgrounds") if extract_to else None, more=more_backgrounds)
     notes += bg_notes
     content = kinds.get("content", {})
     picture = "flat" not in content and bool(content)
@@ -297,6 +297,9 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
 
     # Footer label and slide number: where they sit, and whether the template shows them at all
     on_master = [ET.fromstring(z.read(part)) for part in _master.slides_on(z, master_part)]
+    gap = _master.column_gap(z, master_part, (cx, cy))
+    if gap is not None:
+        frame["column_gap"] = gap
     spec["body"] = _master.body_text(master, layout_xml.get("content"))
     spec["bullets"] = _master.bullets(master, layout_xml.get("content"), (cx, cy), resolve)
     spec["footer"] = _master.footer(master, layout_xml.get("content"), (cx, cy), px_per_pt, resolve, on_master)
@@ -304,6 +307,8 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
     if set(aligns.values()) != {"start"}:
         words = {"start": "left", "center": "centered", "end": "right"}
         notes.append("title alignment follows the template: " + ", ".join(f"{kind} slides {words[a]}" for kind, a in aligns.items()))
+    if more_kinds:
+        spec["more_backgrounds"] = more_kinds
     if kinds:
         spec["backgrounds"] = kinds
         hero = kinds.get("title", {})
@@ -575,7 +580,7 @@ GROUPS = [
     ("Type: scale", r"--text-"),
     ("Type: rhythm", r"--(leading|tracking)-"),
     ("Spacing scale", r"--space-"),
-    ("Frame: where the title sits, the margins, the footer", r"--(frame|title|eyebrow|footer|hero|section)-"),
+    ("Frame: where the title sits, the margins, the footer", r"--(frame|title|eyebrow|footer|hero|section|column)-"),
     ("Bullets: a drawn shape for each of two levels", r"--bullet-"),
     ("Background picture, and a panel behind the text when the picture is busy", r"--bg-"),
     ("Shape", r"--(radius|stroke|shadow)-"),
@@ -775,6 +780,8 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         tokens["--title-size"] = f"{size}px"
         if size != int(frame["title_size"]):
             notes.append(f"the template's title size ({frame['title_size']}px on this stage) was limited to {size}px to suit the layouts")
+    if frame.get("column_gap"):
+        tokens["--column-gap"] = f"{max(40, min(128, int(frame['column_gap'])))}px"
     if frame.get("title_weight"):
         tokens["--title-weight"] = str(frame["title_weight"])
         tokens["--weight-display"] = str(frame["title_weight"])
@@ -918,7 +925,7 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             bg_meta[kind] = {"flat": entry["flat"]}
             return
         bg_meta[kind] = {
-            "picture": value if entry.get("css") else re.sub(r'^url\("(.*)"\)$', r"\1", value),
+            "picture": value,
             "from": entry.get("layout", ""), "drawn_by_libreoffice": bool(entry.get("rendered")),
             "safe": list(entry["safe"]) if entry.get("safe") else None,
             "ink": entry["ink"], "text": entry["text"], "bg": entry["bg"], "worst": entry["worst"],
@@ -926,10 +933,19 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             "description": entry["description"],
         }
 
-    def picture_value(kind: str, entry: dict) -> str:
+    def picture_value(kind: str, entry: dict) -> tuple[str, str]:
+        """(the value for --bg-image, what theme.json records) for one entry.
+
+        A picture file is declared once on :root as --bg-<name> and used by
+        name, so a deck carries one copy however many kinds of slide share it,
+        and the build can leave out pictures a deck never shows.
+        """
         if entry.get("css"):
-            return entry["css"]
-        return f'url("backgrounds/{_backgrounds.save(entry, out / "backgrounds", kind, saved)}")'
+            return entry["css"], entry["css"]
+        fname = _backgrounds.save(entry, out / "backgrounds", kind, saved)
+        token = "--bg-" + Path(fname).stem
+        tokens[token] = f'url("backgrounds/{fname}")'
+        return f"var({token})", f"backgrounds/{fname}"
 
     def panel_value(entry: dict) -> str:
         panel = entry.get("panel")
@@ -948,9 +964,9 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         return left, right
 
     if picture:
-        tokens["--bg-image"] = picture_value("content", content)
+        tokens["--bg-image"], recorded = picture_value("content", content)
         tokens["--bg-panel"] = panel_value(content)
-        remember("content", content, tokens["--bg-image"])
+        remember("content", content, recorded)
         safe = content.get("safe")
         if safe:
             left, right = side_margins(safe, "content")
@@ -997,12 +1013,13 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
                 groups.append((entry, [kind]))
         for entry, names in groups:
             decl: dict[str, str] = {"--bg-image": "none", "--bg-panel": "none"}
+            recorded = ""
             if entry and "flat" in entry:
                 flat = entry["flat"]
                 ink = "#FFFFFF" if contrast("#FFFFFF", flat) >= 4.5 else (text if luminance(text) < 0.2 else "#111111")
                 decl.update(inverse_tokens(flat, ink, accent2))
             elif entry:
-                decl["--bg-image"] = picture_value(names[0], entry)
+                decl["--bg-image"], recorded = picture_value(names[0], entry)
                 decl["--bg-panel"] = panel_value(entry)
                 decl.update(inverse_tokens(entry["bg"], entry["text"], accent2))
                 safe = entry.get("safe")
@@ -1019,11 +1036,52 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
                     decl["--section-number-gap"] = "var(--space-4)"
                     decl["--text-mega"] = "200px"
             for kind in names:
-                remember(kind, entry if kind in kinds else None, decl["--bg-image"])
+                remember(kind, entry if kind in kinds else None, recorded)
             selector = ",\n".join(f'.slide[data-layout="{n}"]:where(:not([data-tone], [data-bg])),\n.slide[data-bg="{n}"]' for n in names)
             source = f' ("{entry["layout"]}" in the template)' if entry and entry.get("layout") else ""
             hero_css.append(f"/* {', '.join(names).capitalize()} slides{source} */\n{selector} {{\n"
                             + "".join(f"  {k}: {v};\n" for k, v in decl.items()) + "}")
+
+    # More backgrounds, from the template's other layouts: a slide asks for one with data-bg="name".
+    # Each is a content slide on another background, so it gets the full set of colors for that
+    # background, and the tokens that point at colors are stated again (they were worked out on :root).
+    more_css, more_names = [], []
+    for bg_name, entry in (spec.get("more_backgrounds") or {}).items():
+        if not isinstance(entry, dict):
+            continue
+        decl = {"--bg-image": "none", "--bg-panel": "none"}
+        recorded = ""
+        if "flat" in entry:
+            ebg = entry["flat"]
+            etext = "#FFFFFF" if contrast("#FFFFFF", ebg) > contrast(text if luminance(text) < 0.2 else "#111111", ebg) else (
+                text if luminance(text) < 0.2 else "#111111")
+        else:
+            decl["--bg-image"], recorded = picture_value(bg_name, entry)
+            decl["--bg-panel"] = panel_value(entry)
+            ebg, etext = entry["bg"], entry["text"]
+        emode = "dark" if luminance(ebg) < 0.18 else "light"
+        colors = color_tokens(ebg, etext, accent, accent2, chart, emode, [], inverse_bg, None)
+        decl.update({k: v for k, v in colors.items()
+                     if (k.startswith("--color-") and not k.startswith(("--color-inverse", "--color-letterbox"))) or k.startswith("--chart-")})
+        decl.update({"--title-color": "var(--color-text)", "--eyebrow-color": "var(--color-accent)", "--footer-color": "var(--color-text-subtle)"})
+        for key, fallback in (("--bullet-color", "var(--color-accent)"), ("--bullet-2-color", "var(--color-text-subtle)")):
+            value = tokens.get(key, fallback)
+            decl[key] = ensure_contrast(value, ebg, 3.0, prefer="darker" if emode == "light" else "lighter") if value.startswith("#") else value
+        safe = entry.get("safe")
+        if safe and "flat" not in entry:
+            left, right = side_margins(safe, f'"{bg_name}"')
+            decl["--frame-left"], decl["--frame-right"] = f"{left}px", f"{right}px"
+            decl["--frame-top"] = f"{max(48, min(300, round(safe[1])))}px"
+            decl["--frame-bottom"] = f"{max(foot_top, 120, min(380, round(_backgrounds.STAGE_H - safe[1] - safe[3])))}px"
+        remember(bg_name, entry, recorded)
+        bg_meta[bg_name]["from"] = entry.get("layout", "")
+        bg_meta[bg_name]["extra"] = True
+        more_names.append(bg_name)
+        more_css.append(f'/* "{entry.get("layout", bg_name)}" in the template */\n.slide[data-bg="{bg_name}"]:where(:not([data-tone])) {{\n'
+                        + "".join(f"  {k}: {v};\n" for k, v in decl.items()) + "}")
+    if more_names:
+        notes.append("more backgrounds from the template's other layouts, for a slide to ask for by name: "
+                     + ", ".join(f'data-bg="{n}"' for n in more_names))
 
     blocks = [format_block(":root", tokens)]
     variants = [base_mode]
@@ -1087,6 +1145,10 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         css += ("/* Backgrounds for title, section and closing slides. Each rule carries the picture, the margins that keep\n"
                 "   text clear of its artwork, and the colors that read on it. A slide opts in with data-bg=\"title\" (or\n"
                 "   section, closing) and out with data-bg=\"none\". */\n" + "\n".join(hero_css) + "\n")
+    if more_css:
+        css += ("/* More backgrounds, from the template's other layouts. A slide asks for one with data-bg=\"name\"; each rule\n"
+                "   carries the picture or color, the margins that keep text clear of its artwork, and the colors that read on it. */\n"
+                + "\n".join(more_css) + "\n")
     (out / "theme.css").write_text(css, encoding="utf-8")
 
     fam_list = sorted({m.group(1) for r in rules for m in [re.search(r'font-family:\s*"([^"]+)"', r)] if m})
@@ -1102,7 +1164,7 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
     }
     if spec.get("master"):
         meta["master"] = spec["master"]            # which of the template's slide masters this came from
-    if any("picture" in entry for entry in bg_meta.values()):
+    if any("picture" in entry or entry.get("extra") for entry in bg_meta.values()):
         meta["backgrounds"] = bg_meta
     (out / "theme.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     return out
@@ -1131,7 +1193,7 @@ def check_theme(path: Path) -> tuple[list[str], list[str]]:
     missing = [k for k in defaults if k not in base]
     if missing:
         notes.append(f"{len(missing)} token(s) not defined; the built-in theme's values are used for: {', '.join(missing)}")
-    unknown = [k for k in base if k not in defaults]
+    unknown = [k for k in base if k not in defaults and not k.startswith("--bg-")]   # --bg-<name> holds a background picture
     if unknown:
         notes.append(f"extra tokens the layouts do not use: {', '.join(unknown[:10])}")
     meta = _deck.read_json(path / "theme.json", {}) or {}
@@ -1197,19 +1259,26 @@ def report(out: Path, notes: list[str]) -> int:
     meta = _deck.read_json(out / "theme.json", {}) or {}
     print(f"  variants: {', '.join(meta.get('variants', []))}   font files in the theme: {', '.join((meta.get('fonts') or {}).get('families', [])) or 'none'}"
           f"   logo: {'yes' if meta.get('logo') else 'no'}")
-    pictures = {k: e for k, e in (meta.get("backgrounds") or {}).items() if "picture" in e}
+    all_bgs = meta.get("backgrounds") or {}
+    pictures = {k: e for k, e in all_bgs.items() if "picture" in e}
     if pictures:
         print("  Backgrounds kept as pictures:")
         for kind, e in pictures.items():
             how = "a gradient, kept as code" if e["picture"].startswith("linear-gradient") else (
                 "drawn by LibreOffice" if e.get("drawn_by_libreoffice") else "taken from the file")
-            print(f"    {kind:<8} {how}; {e['ink']} text" + ("" if e["calm"] else "; panel behind the text"))
+            label = f'data-bg="{kind}"' if e.get("extra") else kind
+            source = f' (the layout "{e["from"]}")' if e.get("extra") and e.get("from") else ""
+            print(f"    {label:<8} {how}{source}; {e['ink']} text" + ("" if e["calm"] else "; panel behind the text"))
             print(f"             {e['description']}")
         size = sum(f.stat().st_size for f in (out / "backgrounds").glob("*")) if (out / "backgrounds").is_dir() else 0
         if size:
             print(f"    the pictures add {_deck.human_size(size)} to each deck built with this theme")
         print("    Look at each picture, then rewrite its \"description\" in theme.json in your own words:\n"
               "    say what must not be covered (a face, a product, a logo). It is what you read when composing a slide by hand.")
+    flat_more = {k: e for k, e in all_bgs.items() if e.get("extra") and "flat" in e}
+    if flat_more:
+        print("  Flat backgrounds from other layouts: "
+              + ", ".join(f'data-bg="{k}" ({e["flat"]}, the layout "{e.get("from", "")}")' for k, e in flat_more.items()))
     font_bytes = sum(f.stat().st_size for f in (out / "fonts").glob("*") if f.suffix.lower() in (".woff2", ".woff", ".ttf", ".otf")) if (out / "fonts").is_dir() else 0
     if font_bytes > 600 * 1024:
         notes = notes + [f"the font files total {_deck.human_size(font_bytes)}. A deck embeds the faces it uses, so decks in this theme will be "
@@ -1240,7 +1309,9 @@ def background_sheet(out: Path, target: Path) -> bool:
     except ImportError:
         return False
     tw, th, pad, label = 640, 360, 18, 30
-    sheet = Image.new("RGB", (len(entries) * (tw + pad) + pad, th + label + pad * 2), (24, 26, 32))
+    cols = min(3, len(entries))
+    rows = -(-len(entries) // cols)
+    sheet = Image.new("RGB", (cols * (tw + pad) + pad, rows * (th + label + pad) + pad), (24, 26, 32))
     draw = ImageDraw.Draw(sheet)
     for i, (kind, e) in enumerate(entries):
         if e["picture"].startswith("linear-gradient"):
@@ -1248,14 +1319,15 @@ def background_sheet(out: Path, target: Path) -> bool:
         else:
             im = Image.open(out / e["picture"]).convert("RGB")
         im = im.resize((tw, th))
-        x, y = pad + i * (tw + pad), pad + label
+        x, y = pad + (i % cols) * (tw + pad), pad + (i // cols) * (th + label + pad) + label
         sheet.paste(im, (x, y))
         if e.get("safe"):
             sx, sy, sw, sh = (v / 3 for v in e["safe"])
             for grow in range(3):
                 draw.rectangle((x + sx - grow, y + sy - grow, x + sx + sw + grow, y + sy + sh + grow),
                                outline=(255, 255, 255) if e["ink"] == "light" else (20, 20, 20))
-        draw.text((x, pad), f"{kind}: {e['ink']} text" + ("" if e["calm"] else ", panel") + "  (box = text area)", fill=(230, 232, 240))
+        name = f'data-bg="{kind}"' if e.get("extra") else kind
+        draw.text((x, y - label + 8), f"{name}: {e['ink']} text" + ("" if e["calm"] else ", panel") + "  (box = text area)", fill=(230, 232, 240))
     sheet.save(target)
     return True
 
@@ -1324,6 +1396,8 @@ def main() -> None:
     p1.add_argument("--backgrounds", choices=("auto", "always", "never"), default="auto",
                     help="keep the template's backgrounds as pictures: auto (when they are more than a flat color or a small "
                          "mark), always (even small marks), never (flat colors only)")
+    p1.add_argument("--no-extra-backgrounds", action="store_true",
+                    help="keep backgrounds for content, title, section and closing slides only, not for the template's other layouts")
     p1.add_argument("--master", metavar="NUMBER_OR_NAME",
                     help="which slide master to use when the file has several (default: the one most slides use)")
     common(p1)
@@ -1379,7 +1453,8 @@ def main() -> None:
             _deck.die(f"{src} does not exist")
         name = args.name or re.sub(r"[^a-z0-9]+", "-", src.stem.lower()).strip("-")
         args.name = name
-        spec, notes = read_pptx(src, Path(tempfile.mkdtemp(prefix="dynamic-decks-")), args.backgrounds, args.master)
+        spec, notes = read_pptx(src, Path(tempfile.mkdtemp(prefix="dynamic-decks-")), args.backgrounds, args.master,
+                                not args.no_extra_backgrounds)
     elif args.cmd == "from-spec":
         spec = _deck.read_json(Path(args.spec))
         if not isinstance(spec, dict):

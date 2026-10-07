@@ -101,6 +101,50 @@ class Builder:
             return m.group(0) if new == m.group(2).strip() else "url(" + new + ")"
         return re.sub(r"url\(\s*(['\"]?)(.*?)\1\s*\)", repl, css)
 
+    def prune_backgrounds(self, css: str, body: str, theme_name: str) -> str:
+        """Leave out the background pictures this deck never shows, and check the ones it asks for.
+
+        A theme declares each picture once (--bg-title: url(...)) and its rules
+        use it by name, so a picture is dropped by setting its declaration to
+        none. Which kinds of slide a picture serves is read from the selectors
+        of the rules that use it.
+        """
+        asked = set(re.findall(r'<section\b[^>]*\bdata-bg="([^"]+)"', body))
+        layouts = set(re.findall(r'<section\b[^>]*\bdata-layout="([^"]+)"', body))
+        offered: set[str] = set()                # every name a slide may put in data-bg in this theme
+        serves: dict[str, set[str]] = {}         # picture token -> kinds of slide it is behind
+        root_uses: set[str] = set()
+        declared = set(re.findall(r"(--bg-(?!image\b|panel\b)[\w-]+)\s*:\s*url\(", css))
+        gone = set(re.findall(r"(--bg-(?!image\b|panel\b)[\w-]+)\s*:\s*none\b", css))
+        for selector, block in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+            names = set(re.findall(r'data-bg="([^"]+)"', selector))
+            offered |= names
+            refs = set(re.findall(r"var\((--bg-[\w-]+)\)", block)) & (declared | gone)
+            if not refs:
+                continue
+            if not names and "data-layout" not in selector:
+                root_uses |= refs                 # the content background, on :root
+            kinds = names | set(re.findall(r'data-layout="([^"]+)"', selector))
+            for ref in refs:
+                serves.setdefault(ref, set()).update(kinds)
+        used = asked | (layouts & {"title", "section", "closing"})
+        dropped = sorted(t for t in declared if t not in root_uses and not (serves.get(t, set()) & used))
+        for token in dropped:
+            css = re.sub(re.escape(token) + r"\s*:\s*url\([^)]*\)", token + ": none", css)
+        if dropped:
+            self.notes.append(f"{len(dropped)} background picture(s) of the theme are not used by this deck and were left out: "
+                              + ", ".join(t[5:] for t in dropped))
+        known = offered | {"none", "title", "section", "closing"}
+        for name in sorted(asked - known):
+            self.notes.append(f'data-bg="{name}" is not a background in the theme \'{theme_name}\''
+                              + (f" (it has: {', '.join(sorted(offered | {'none'}))})" if offered else " (it has no picture backgrounds)")
+                              + "; that slide gets the ordinary background")
+        missing = sorted(n for n in asked if any(n in kinds for t, kinds in serves.items() if t in gone))
+        for name in missing:
+            self.notes.append(f'data-bg="{name}": the picture for it was left out of the theme inside this deck when it was built. '
+                              "Rebuild with the theme installed (build.py --theme) to bring it back.")
+        return css
+
     # ---- theme ----------------------------------------------------------
     def theme_css(self, theme_dir: Path, default_dir: Path, text_chars: set[int], body: str) -> tuple[str, dict]:
         css = (theme_dir / "theme.css").read_text(encoding="utf-8")
@@ -160,6 +204,7 @@ class Builder:
             face_css.append(re.sub(r"\s+", " ", raw))
         body_css = re.sub(r"@font-face\s*\{.*?\}", "", css, flags=re.S)
         body_css = _deck.strip_css_comments(body_css)
+        body_css = self.prune_backgrounds(body_css, body, theme_dir.name)
         body_css = self.embed_css_urls(body_css, theme_dir, "The theme")
         body_css = re.sub(r"\n\s*\n+", "\n", body_css).strip()
 
@@ -263,6 +308,8 @@ class Builder:
         main = re.sub(
             r"(<(?:video)\b[^>]*?\sposter\s*=\s*)([\"'])(.*?)\2", attr_repl, main, flags=re.I | re.S)
         main = self.embed_css_urls(main, base_dir, "A slide")
+        if embedded_theme is not None:           # same check and same trimming as for an installed theme
+            embedded_theme = self.prune_backgrounds(embedded_theme, main, theme_name)
 
         body_for_fonts = main + "\n".join(deck_styles)
         text = re.sub(r"<(script|style)\b.*?</\1>", " ", main, flags=re.I | re.S)

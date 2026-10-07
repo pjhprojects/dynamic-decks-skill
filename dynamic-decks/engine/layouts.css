@@ -314,7 +314,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 .slide[data-layout="two-column"] .slide-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-7);
+  gap: var(--column-gap, var(--space-7));
   align-items: start;
 }
 .slide[data-layout="two-column"][data-split="2-1"] .slide-body { grid-template-columns: 2fr 1fr; }

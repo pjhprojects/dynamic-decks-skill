@@ -379,3 +379,26 @@ def body_text(master, layout) -> dict:
             line = int(pts.get("val")) / 100 / (size * 1.2)      # exact spacing in points, against single spacing
             break
     return {"size_pt": size, "line": round(line, 3) if line else None}
+
+
+# --------------------------------------------------------------------------
+# Columns
+# --------------------------------------------------------------------------
+def column_gap(z: zipfile.ZipFile, master_part: str, size: tuple[int, int]) -> int | None:
+    """The space between the two text columns of the master's two-content layout, in stage px.
+
+    Measured between the text itself: the gap between the boxes plus the
+    inset PowerPoint keeps inside each box. None when there is no such layout.
+    """
+    names = set(z.namelist())
+    for typ, target in rels_of(z, master_part).values():
+        if typ != "slideLayout" or target not in names:
+            continue
+        root = ET.fromstring(z.read(target))
+        if root.get("type") not in ("twoObj", "twoTxTwoObj"):
+            continue
+        boxes = sorted(b for b in (box_of(sp, size) for sp in placeholders(root, (None, "obj"))) if b)
+        if len(boxes) >= 2 and boxes[1][0] >= boxes[0][0] + boxes[0][2] - 2:
+            inset = 91440 * 1920 / size[0]         # PowerPoint's default left and right inset
+            return round(boxes[1][0] - (boxes[0][0] + boxes[0][2]) + 2 * inset)
+    return None

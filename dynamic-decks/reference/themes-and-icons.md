@@ -169,6 +169,19 @@ the template sets it (`--leading-snug`, `--leading-normal`). If a user wants
 body text as large as their template's, say what it costs: fewer words per
 slide, and edit the `--text-*` tokens in `theme.css` by hand.
 
+**Columns.** The gap between the two text columns of the master's two-content
+layout becomes `--column-gap`, used by the two-column layout.
+
+**Other layouts.** A template usually has more layouts than content, title and
+section: a quote slide, a dark version of the content slide, a divider. Any
+layout that looks different from those becomes a background a slide can ask
+for by name; see [More backgrounds, by name](#more-backgrounds-by-name).
+
+What is not taken from the master: the date box, picture bullets, table and
+chart styles, tints and shades of theme colors, and PowerPoint's own
+placeholder arrangements (comparison, picture with caption, vertical text).
+The fifteen layouts here stay as they are; the theme changes how they look.
+
 ## Backgrounds that are pictures
 
 When a template's background is more than one flat color (a photo, a gradient,
@@ -213,6 +226,9 @@ The theme turns those into rules, so the ordinary layouts need nothing from you:
 - Title, section and closing slides each get a rule in the theme's Decor
   section with their picture, margins and colors. A template with no closing
   layout uses the title's.
+- Each picture file is declared once as a token (`--bg-content`, `--bg-title`
+  and so on) and used by name, so a deck holds one copy however many kinds of
+  slide share it.
 - A busy picture gets `--bg-panel`, a translucent panel over the text area.
   The rule that draws it is in the theme's Decor and uses `.slide::before`, so
   in such a theme a custom slide's own decoration needs an element of its own.
@@ -237,6 +253,36 @@ When writing slides in such a theme:
   frame. Anything positioned by hand may land on the artwork.
 - `render.py` compares every piece of text with the pixels really behind it and
   reports the ones that are hard to read. Move the text; do not recolor it.
+
+### More backgrounds, by name
+
+Every other layout in the template is examined too. One that sets its own
+background, carries its own artwork or switches the master's artwork off is
+drawn like the four kinds above, and kept when it looks different from all of
+them. It gets a name made from the layout's own ("Dark Content" becomes
+`dark-content`), and a slide asks for it with that name:
+
+```html
+<section class="slide" data-layout="quote" data-bg="quote"> ... </section>
+<section class="slide" data-layout="bullets" data-bg="dark-content"> ... </section>
+```
+
+Each is a rule in the theme's Decor with the picture or flat color, the
+margins that keep text off its artwork, and a full set of colors that read on
+it (text, accents, chart colors), so any layout works on it. The names, with
+a description and text area for each, are in `theme.json` under `backgrounds`
+(marked `"extra": true`), and the report lists them. Before writing slides in
+such a theme, read that list: a quote on the quote background and a divider
+on the divider background is what makes a deck look like the template.
+
+- Without LibreOffice only layouts with their own background fill are found;
+  a layout that differs by artwork alone needs the drawing.
+- At most twelve are kept. `--no-extra-backgrounds` keeps to the four kinds.
+- The build embeds only the pictures a deck uses and says which it left out.
+  A deck rebuilt later from its own embedded theme cannot bring those back;
+  rebuild with the theme installed.
+- The build reports a `data-bg` name the theme does not have, with the names
+  it does have. That slide gets the ordinary background.
 
 To supply pictures yourself, with a template or without one:
 

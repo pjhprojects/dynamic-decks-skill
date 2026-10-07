@@ -65,6 +65,8 @@ the theme with `text-align: var(--title-align)`. `--hero-justify`
 (`flex-start`, `center`, `flex-end`) is where the text block sits top to
 bottom on title and section slides.
 
+`--column-gap` is the space between the two columns of the two-column layout.
+
 `--frame-left` and `--frame-right` are the side margins on their own. They
 equal `--frame-x` unless the theme's background has artwork down one side, so
 use these two when placing something against a margin by hand. `--hero-bottom`
@@ -93,7 +95,10 @@ the same tokens.
 Set by the theme, not by slides. `--bg-image` is the picture or gradient behind
 a slide (`none` in a flat theme) and `--bg-panel` the translucent panel behind
 the text when that picture is too busy to read over. A slide chooses with an
-attribute instead: `data-bg="title"`, `"section"`, `"closing"` or `"none"`.
+attribute instead: `data-bg="title"`, `"section"`, `"closing"`, `"none"`, or a
+name the theme lists. Each picture file is held in a token of its own
+(`--bg-content`, `--bg-title`, `--bg-<name>`); the build sets the ones a deck
+does not use to `none`.
 
 ## Shape
 
