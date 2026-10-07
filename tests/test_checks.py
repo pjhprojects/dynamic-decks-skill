@@ -72,5 +72,10 @@ t.ok("the showcase deck passes every check, with no warnings", proc.returncode =
 example = SKILL.parent / "examples" / "dynamic-decks-showcase.html"
 t.ok("the showcase in examples/ is up to date (run tools/package.py to refresh it)",
      example.is_file() and example.read_bytes() == show.read_bytes())
+front = (SKILL.parent / "index.html").read_text(encoding="utf-8")
+target = re.search(r'url=([^"]+)"', front)
+t.ok("the live site's front page forwards to the showcase in examples/",
+     target is not None and (SKILL.parent / target.group(1)).resolve() == example.resolve() and f"location.replace('{target.group(1)}'" in front, front[:200])
+t.ok("the showcase's closing slide links to the project page", 'href="https://github.com/pjhprojects/dynamic-decks-skill"' in show.read_text(encoding="utf-8"))
 t.ok("the license inside the skill matches the repository's", (SKILL / "LICENSE.txt").read_text() == (SKILL.parent / "LICENSE").read_text())
 t.done()

@@ -6,7 +6,7 @@ Add it to Claude, ChatGPT, Codex or another agent that uses skills. Ask for a de
 
 ![The DynamicDecks showcase playing: a title that retypes itself, figures counting up, a request typing while a slide builds, a truck driving a route, a ranking re-sorting year by year, a chart revealed in three clicks, sliders redrawing a forecast, and a network following the pointer](docs/images/demo.gif)
 
-**[Open the live showcase](https://pjhprojects.github.io/dynamic-decks-skill/examples/dynamic-decks-showcase.html)** and press the right arrow.
+**[Open the live showcase](https://pjhprojects.github.io/dynamic-decks-skill/)** and press the right arrow.
 
 Every slide in that clip is live in the browser, with no video and no images. It is the showcase deck that ships with the skill. To see that it really is one self-contained file, download [`examples/dynamic-decks-showcase.html`](examples/dynamic-decks-showcase.html) and double-click it.
 
@@ -190,6 +190,7 @@ dynamic-decks/        the skill itself; this folder is what gets installed
   scripts/            build, check, render, chart, locate, add_theme, add_icons ...
   reference/          detail the agent reads when it needs it
 examples/             the showcase and the starter, built and ready to open
+index.html            front page of the live site; forwards to the showcase
 docs/images/          the pictures on this page
 tests/                browser and script tests
 tools/                package.py builds the skill; screenshots.py remakes the pictures
