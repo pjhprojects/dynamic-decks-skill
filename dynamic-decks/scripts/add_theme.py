@@ -45,6 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _backgrounds  # noqa: E402
 import _deck  # noqa: E402
+import _master  # noqa: E402
 from _deck import contrast, ensure_contrast, luminance, mix, oklab, shift_lightness  # noqa: E402
 
 NS = {
@@ -104,7 +105,8 @@ def _rels(z: zipfile.ZipFile, part: str) -> dict[str, tuple[str, str]]:
     return out
 
 
-def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "auto") -> tuple[dict, list[str]]:
+def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "auto",
+              master_choice: str | None = None) -> tuple[dict, list[str]]:
     """Pull brand values out of a .pptx or .potx. Returns (spec, notes)."""
     notes: list[str] = []
     try:
@@ -122,9 +124,17 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
     px = 1920 / cx                       # EMU -> stage px
     px_per_pt = 1920 / (cx / 12700)
 
-    master_part = next((t for typ, t in _rels(z, "ppt/presentation.xml").values() if typ == "slideMaster"), None)
-    if not master_part or master_part not in names:
-        _deck.die("could not find a slide master in the template")
+    # A file may hold several slide masters (a light and a dark one, sub-brands, leftovers from pasted slides)
+    masters = _master.list_masters(z)
+    chosen, why = _master.pick_master(masters, master_choice)
+    if chosen is None:
+        if not masters:
+            _deck.die("could not find a slide master in the template")
+        _deck.die(f"{why}. It has: {_master.describe_masters(masters)}")
+    master_part = chosen["part"]
+    if len(masters) > 1:
+        notes.append(f"the file has {len(masters)} slide masters: {_master.describe_masters(masters)}. The theme was made from "
+                     f"\"{chosen['name']}\" because {why}. Pass --master with a number or a name to use another.")
     master = ET.fromstring(z.read(master_part))
     mrels = _rels(z, master_part)
     theme_part = next((t for typ, t in mrels.values() if typ == "theme"), None)
@@ -268,6 +278,8 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
         spec["colors"]["title"] = title_color
     if logo:
         spec["logo"] = {"base": str(logo)}
+    if len(masters) > 1:
+        spec["master"] = chosen["name"]
     if kinds:
         spec["backgrounds"] = kinds
         hero = kinds.get("title", {})
@@ -858,6 +870,8 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         "fonts": {"license": spec.get("font_license") or "", "families": fam_list},
         "logo": logo_meta or None,
     }
+    if spec.get("master"):
+        meta["master"] = spec["master"]            # which of the template's slide masters this came from
     if any("picture" in entry for entry in bg_meta.values()):
         meta["backgrounds"] = bg_meta
     (out / "theme.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
@@ -1072,6 +1086,8 @@ def main() -> None:
     p1.add_argument("--backgrounds", choices=("auto", "always", "never"), default="auto",
                     help="keep the template's backgrounds as pictures: auto (when they are more than a flat color or a small "
                          "mark), always (even small marks), never (flat colors only)")
+    p1.add_argument("--master", metavar="NUMBER_OR_NAME",
+                    help="which slide master to use when the file has several (default: the one most slides use)")
     common(p1)
     p2 = sub.add_parser("new", help="create a theme from a few brand values")
     common(p2)
@@ -1125,7 +1141,7 @@ def main() -> None:
             _deck.die(f"{src} does not exist")
         name = args.name or re.sub(r"[^a-z0-9]+", "-", src.stem.lower()).strip("-")
         args.name = name
-        spec, notes = read_pptx(src, Path(tempfile.mkdtemp(prefix="dynamic-decks-")), args.backgrounds)
+        spec, notes = read_pptx(src, Path(tempfile.mkdtemp(prefix="dynamic-decks-")), args.backgrounds, args.master)
     elif args.cmd == "from-spec":
         spec = _deck.read_json(Path(args.spec))
         if not isinstance(spec, dict):

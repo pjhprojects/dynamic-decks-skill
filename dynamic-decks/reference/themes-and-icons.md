@@ -9,6 +9,7 @@ and choose which to use. Read this when a user wants to add, change or choose on
 - [Where things live](#where-things-live)
 - [Choosing a theme or icon set for a deck](#choosing-a-theme-or-icon-set-for-a-deck)
 - [Adding a theme from a PowerPoint template](#adding-a-theme-from-a-powerpoint-template)
+- [What a theme takes from the slide master](#what-a-theme-takes-from-the-slide-master)
 - [Backgrounds that are pictures](#backgrounds-that-are-pictures)
 - [Adding a theme from a brand guide or description](#adding-a-theme-from-a-brand-guide-or-description)
 - [What a theme is](#what-a-theme-is)
@@ -91,6 +92,27 @@ What a template cannot give, and what happens instead:
 
 A PowerPoint template never converts perfectly. Say so, and treat the first
 result as a draft to review with the user.
+
+## What a theme takes from the slide master
+
+The slide master, and the layouts under it, hold more of a brand than its
+colors. `from-pptx` reads the following once and stores each as a token or a
+rule in the theme, so slides follow it without anyone opening the template again.
+
+**Which master.** A file can hold several slide masters: a light and a dark
+version, one per sub-brand, or leftovers that came along when slides were
+pasted in from another deck. The theme is made from the master most slides
+use, or the first when the file has no slides (a pure template). When there is
+more than one, the report lists them all with how many layouts and slides each
+has, and says which was used and why. To use another:
+
+```bash
+python scripts/add_theme.py from-pptx Template.pptx --name acme-dark --master 2
+python scripts/add_theme.py from-pptx Template.pptx --name acme-dark --master "Corporate Dark"
+```
+
+A wrong master is the usual reason a new theme has colors or a background the
+user does not recognize, so read that line of the report first.
 
 ## Backgrounds that are pictures
 
