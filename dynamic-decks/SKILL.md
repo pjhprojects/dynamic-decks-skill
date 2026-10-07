@@ -109,7 +109,8 @@ python scripts/render.py talk.html                 # screenshots, contact sheet,
 
 This opens the deck in a real browser, captures every slide in its resting
 state, and reports content that runs off a slide, collides with the footer or
-is too small to read, plus any script error or network request. The resting
+is too small to read, text that is hard to read against what is really behind
+it (a picture background, a photo), plus any script error or network request. The resting
 state is the last frame of each animation, so this also proves the still
 version of every dynamic slide is complete. Then open
 `talk-render/contact.png` and actually look: the report cannot judge whether a
@@ -265,6 +266,12 @@ setup. Users can add their own and choose which to use; read
 - **An icon set from a folder of SVGs**:
   `python scripts/add_icons.py ./svgs --name acme --license "..."`
 
+A template whose background is a photo, a gradient or artwork made of shapes
+keeps that background as a picture, one per kind of slide, and the theme
+records where text may go on it and in which color. It is exact when
+LibreOffice is installed; say so when it is not. In such a theme the text area
+can be narrow, so read the notes the command prints before writing slides.
+
 Each prints what it could not carry over or had to adjust. Relay that list to
 the user in plain words, show them the sample deck in their theme, and treat
 the first result as a draft to review together. Two things are the user's to
@@ -283,7 +290,7 @@ theme carries it, and can hand it back).
 |---|---|
 | `build.py` | Source or built deck in, one self-contained `.html` out; runs the checks |
 | `check.py` | The delivery checks on their own |
-| `render.py` | Screenshots, contact sheet, overflow report, PDF and notes PDF (needs Playwright) |
+| `render.py` | Screenshots, contact sheet, overflow and text-contrast report, PDF and notes PDF (needs Playwright) |
 | `chart.py` | Bar, horizontal bar, line and donut charts as themed SVG |
 | `find_icon.py` | Search the icon set by meaning; `--check NAME...` confirms names; `--sets` lists sets |
 | `unpack.py` | Built deck back to an editable source; `--theme-to` recovers its theme |
@@ -292,9 +299,10 @@ theme carries it, and can hand it back).
 | `add_icons.py` | Import a folder of SVGs as an icon set; `--catalog` writes a browsable page |
 
 All take `--help`. They need Python 3.9 or later. Pillow (image compression,
-contact sheets), Playwright with Chromium (`render.py`) and fontTools (reading
-font files for a theme) are optional; each script says what it skipped without
-them.
+contact sheets, background pictures), Playwright with Chromium (`render.py`),
+fontTools (reading font files for a theme) and LibreOffice (drawing a
+PowerPoint template's backgrounds exactly) are optional; each script says what
+it skipped without them.
 
 ## Reference files
 
@@ -304,6 +312,6 @@ them.
 | `reference/tokens.md` | Styling anything by hand: every token and what it is for |
 | `reference/custom-slides.md` | A slide needs custom CSS, script or animation, or is full-bleed |
 | `reference/charts-and-diagrams.md` | A slide has a chart, a diagram or a process |
-| `reference/themes-and-icons.md` | Adding, choosing or keeping a theme or icon set; settings |
+| `reference/themes-and-icons.md` | Adding, choosing or keeping a theme or icon set; picture backgrounds; settings |
 | `template/starter.src.html` | Working markup for every layout, to copy from |
 | `template/showcase.src.html` | Working dynamic slides: typing, counting, travel along a path, a chart that plays, a stepped chart, live controls, a diagram with traffic, canvas |

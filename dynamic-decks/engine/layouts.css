@@ -27,8 +27,15 @@
 .slide {
   display: flex;
   flex-direction: column;
-  padding: var(--frame-top) var(--frame-x) var(--frame-bottom);
+  padding: var(--frame-top) var(--frame-right, var(--frame-x)) var(--frame-bottom) var(--frame-left, var(--frame-x));
   background: var(--color-bg);
+  /* A theme may put a picture behind the slide (--bg-image). When the picture
+     is too busy to read over, the theme also draws a panel behind the text
+     (--bg-panel); that rule lives in the theme's Decor, so flat themes carry
+     nothing for it. */
+  background-image: var(--bg-image, none);
+  background-size: cover;
+  background-position: center;
   color: var(--color-text);
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -37,9 +44,15 @@
   letter-spacing: var(--tracking-normal);
 }
 
+/* A slide with a tone of its own is a flat color, and data-bg="none" asks for
+   one: neither shows the theme's picture. */
+.slide[data-tone]:not([data-tone="plain"]),
+.slide[data-bg="none"] { --bg-image: none; --bg-panel: none; }
+
 /* Tones re-map the semantic tokens inside one slide, so everything placed on
    it (text, icons, rules, components) follows without extra classes. */
 .slide:where([data-layout="title"], [data-layout="section"], [data-layout="closing"]):where(:not([data-tone])),
+.slide:where([data-bg="title"], [data-bg="section"], [data-bg="closing"]):where(:not([data-tone])),
 .slide[data-tone="inverse"] {
   --color-bg: var(--color-inverse-bg);
   --color-surface: var(--color-inverse-surface, var(--color-inverse-border));
@@ -106,8 +119,8 @@
 /* Footer: logo, deck label, slide number */
 .slide-footer {
   position: absolute;
-  left: var(--frame-x);
-  right: var(--frame-x);
+  left: var(--frame-left, var(--frame-x));
+  right: var(--frame-right, var(--frame-x));
   bottom: var(--footer-offset);
   display: flex;
   align-items: center;
@@ -219,7 +232,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 /* ---- 3. Layouts --------------------------------------------------------- */
 
 /* title */
-.slide[data-layout="title"] { justify-content: flex-end; padding-bottom: var(--space-7); }
+.slide[data-layout="title"] { justify-content: flex-end; padding-bottom: var(--hero-bottom, var(--space-7)); }
 .slide[data-layout="title"] .slide-eyebrow { font-size: var(--text-md); margin-bottom: var(--space-4); }
 .slide[data-layout="title"] .slide-title {
   max-width: none;
@@ -243,7 +256,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 .slide-meta > * { margin: 0; padding: 0; max-width: none; }
 
 /* section */
-.slide[data-layout="section"] { justify-content: flex-end; padding-bottom: var(--space-7); }
+.slide[data-layout="section"] { justify-content: flex-end; padding-bottom: var(--hero-bottom, var(--space-7)); }
 .slide[data-layout="section"] .slide-title {
   max-width: 18ch;
   font-size: var(--text-3xl);
@@ -253,7 +266,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
 }
 .slide[data-layout="section"] .slide-subtitle { font-size: var(--text-lg); margin-top: var(--space-4); }
 .section-number {
-  margin: 0 0 auto;
+  margin: 0 0 var(--section-number-gap, auto);
   font-family: var(--font-display);
   font-size: var(--text-mega);
   font-weight: var(--weight-bold);
@@ -381,9 +394,9 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
   color: var(--color-text-muted);
 }
 .slide[data-layout="image"] > .slide-footer { right: calc(var(--image-width) + var(--space-7)); }
-.slide[data-layout="image"][data-image-side="left"] { padding-right: var(--frame-x); padding-left: calc(var(--image-width) + var(--space-7)); }
+.slide[data-layout="image"][data-image-side="left"] { padding-right: var(--frame-right, var(--frame-x)); padding-left: calc(var(--image-width) + var(--space-7)); }
 .slide[data-layout="image"][data-image-side="left"] > .slide-image { right: auto; left: 0; }
-.slide[data-layout="image"][data-image-side="left"] > .slide-footer { right: var(--frame-x); left: calc(var(--image-width) + var(--space-7)); }
+.slide[data-layout="image"][data-image-side="left"] > .slide-footer { right: var(--frame-right, var(--frame-x)); left: calc(var(--image-width) + var(--space-7)); }
 .slide[data-layout="image"] .slide-body { justify-content: center; }
 
 /* A contained picture with a caption, usable inside any slide body */

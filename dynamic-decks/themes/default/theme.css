@@ -168,8 +168,12 @@
 
   /* Frame: where the title sits, the margins, the footer */
   --frame-x: 120px;
+  --frame-left: var(--frame-x);    /* set these two apart when a background's artwork takes one side */
+  --frame-right: var(--frame-x);
   --frame-top: 88px;
   --frame-bottom: 120px;
+  --hero-bottom: 96px;             /* space under the text on title and section slides */
+  --section-number-gap: auto;      /* auto pins a section's number to the top of the slide; a length sets it on its title */
   --title-gap: 52px;
   --title-size: 72px;
   --title-weight: 650;
@@ -200,6 +204,11 @@
 
   /* Logo (set by the build when the theme folder has a logo file) */
   --logo-url: none;
+
+  /* Background picture, and a panel behind the text when the picture is busy.
+     add_theme.py fills these in from a template or from --background. */
+  --bg-image: none;
+  --bg-panel: none;
   --logo-height: 34px;
   --logo-width: 160px;
 

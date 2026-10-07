@@ -11,6 +11,9 @@ Every slide is captured in its resting state (final frame, all steps shown),
 which is what print, previews and the overview use. The run also reports:
   * content that runs off the slide or collides with the footer
   * text smaller than the smallest theme size
+  * text that is hard to read against what is really behind it (a picture
+    background, a photo, a colored box): each piece of text is compared with
+    the pixels under it
   * script errors
   * any network request (a deck must make none)
 Look at contact.png (or the individual slide-NN.png files) before delivering.
@@ -82,6 +85,131 @@ PROBE = r"""
 """
 
 
+# Every piece of text on a slide with its color and where its lines are, so
+# the color can be compared with the pixels behind it.
+TEXT_PROBE = r"""
+(n) => {
+  const slide = Deck.slides[n];
+  const sr = slide.getBoundingClientRect();
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 1;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  const cache = new Map();
+  const rgba = (c) => {                       // any CSS color, as sRGB numbers
+    if (!cache.has(c)) {
+      cx.clearRect(0, 0, 1, 1);
+      cx.fillStyle = c;
+      cx.fillRect(0, 0, 1, 1);
+      const d = cx.getImageData(0, 0, 1, 1).data;
+      cache.set(c, [d[0], d[1], d[2], d[3] / 255]);
+    }
+    return cache.get(c);
+  };
+  const out = [];
+  const keys = new Map();
+  const walker = document.createTreeWalker(slide, NodeFilter.SHOW_ELEMENT);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.closest('aside.notes, style, script, defs, symbol, [aria-hidden="true"]')) continue;
+    const texts = Array.from(node.childNodes).filter((c) => c.nodeType === 3 && c.textContent.trim());
+    if (!texts.length) continue;
+    const cs = getComputedStyle(node);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || !parseFloat(cs.fontSize)) continue;
+    const svg = node instanceof SVGElement;
+    let paint = svg ? cs.fill : (cs.webkitTextFillColor || cs.color);
+    if (!paint || paint === 'none' || paint.indexOf('url(') === 0) continue;
+    const color = rgba(paint);
+    let alpha = color[3];
+    for (let el = node; el && el !== slide.parentNode; el = el.parentElement) alpha *= parseFloat(getComputedStyle(el).opacity || '1');
+    if (alpha < 0.3) continue;                // faint on purpose: decoration, not reading matter
+    let rects = [];
+    if (svg) rects = [node.getBoundingClientRect()];
+    else texts.forEach((t) => { const r = document.createRange(); r.selectNodeContents(t); rects.push(...r.getClientRects()); });
+    rects = rects.filter((r) => r.width >= 2 && r.height >= 2 && r.right > sr.left && r.left < sr.right && r.bottom > sr.top && r.top < sr.bottom)
+      .map((r) => [r.left, r.top, r.width, r.height]);
+    if (!rects.length) continue;
+    const owner = node.closest('[data-type]') || node;   // typed text is one span per letter: report the phrase
+    if (!keys.has(owner)) keys.set(owner, keys.size);
+    out.push({ key: keys.get(owner), text: owner.textContent.replace(/\s+/g, ' ').trim().slice(0, 48),
+               color: [color[0], color[1], color[2]], alpha: Math.min(1, alpha), size: Math.round(parseFloat(cs.fontSize)), rects });
+  }
+  return out;
+}
+"""
+HIDE_TEXT = """
+html.deck-probe-notext .slide, html.deck-probe-notext .slide * {
+  color: transparent !important; -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important; transition: none !important;
+}
+html.deck-probe-notext .slide svg text, html.deck-probe-notext .slide svg tspan { fill: transparent !important; stroke: transparent !important; }
+"""
+LOW_CONTRAST = 3.0                              # under this, against the worst tenth of the pixels behind it, text is flagged
+BUSY = 2.5                                      # the pixels behind a piece of text differ by more than this: a busy patch
+BUSY_CONTRAST = 4.5                             # and on a busy patch the text has to clear this instead
+
+
+def _lum(rgb) -> float:
+    def lin(v: float) -> float:
+        v /= 255
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2])
+
+
+def text_contrast(items: list[dict], behind, scale: float) -> list[dict]:
+    """Pieces of text that are hard to read against the pixels behind them.
+
+    `behind` is a screenshot of the slide with its text made invisible. For each
+    piece of text, the contrast is worked out against every pixel under its
+    lines; the figure reported is the one a tenth of those pixels fall below.
+    """
+    from collections import Counter
+    worst: dict[int, dict] = {}
+    for item in items:
+        seen: Counter = Counter()
+        for left, top, width, height in item["rects"]:
+            box = (max(0, int(left * scale)), max(0, int(top * scale)),
+                   min(behind.width, int((left + width) * scale) + 1), min(behind.height, int((top + height) * scale) + 1))
+            if box[2] - box[0] < 2 or box[3] - box[1] < 2:
+                continue
+            crop = behind.crop(box)
+            step = max(1, int(((crop.width * crop.height) / 3000) ** 0.5))
+            if step > 1:
+                crop = crop.resize((max(1, crop.width // step), max(1, crop.height // step)), 0)   # nearest: keep real pixels
+            data = crop.tobytes()
+            seen.update(zip(data[0::3], data[1::3], data[2::3]))
+        if not seen:
+            continue
+        a, ink = item["alpha"], item["color"]
+        ratios = []
+        for bg, count in seen.items():
+            fg = [ink[i] * a + bg[i] * (1 - a) for i in range(3)]
+            hi, lo = sorted((_lum(fg), _lum(bg)), reverse=True)
+            ratios.append(((hi + 0.05) / (lo + 0.05), count))
+        ratios.sort()
+        total = sum(c for _, c in ratios)
+        target, run, value = total * 0.1, 0, ratios[-1][0]
+        for ratio, count in ratios:
+            run += count
+            if run >= target:
+                value = ratio
+                break
+        # how much the background itself varies under the text: a busy patch is tiring to read over
+        # even where every pixel clears the bar, so there the bar is higher
+        lums = sorted((_lum(bg), count) for bg, count in seen.items())
+        marks, run, k = [], 0, 0
+        for cut in (total * 0.05, total * 0.95):
+            while k < len(lums) - 1 and run + lums[k][1] < cut:
+                run += lums[k][1]
+                k += 1
+            marks.append(lums[k][0])
+        busy = (marks[1] + 0.05) / (marks[0] + 0.05)
+        limit = BUSY_CONTRAST if busy > BUSY else LOW_CONTRAST
+        if value < limit and (item["key"] not in worst or value < worst[item["key"]]["contrast"]):
+            worst[item["key"]] = {"text": item["text"], "contrast": round(value, 2), "size": item["size"],
+                                  "busy_behind": busy > BUSY}
+    return sorted(worst.values(), key=lambda entry: entry["contrast"])
+
+
 def parse_slides(spec: str | None, total: int) -> list[int]:
     if not spec:
         return list(range(total))
@@ -129,6 +257,7 @@ def main() -> None:
     ap.add_argument("--notes-pdf", help="also write a PDF with each slide and its notes to this path")
     ap.add_argument("--no-shots", action="store_true", help="skip screenshots (checks and PDF only)")
     ap.add_argument("--scale", type=float, default=1.0, help="screenshot scale factor (default 1 = 1920x1080)")
+    ap.add_argument("--no-contrast", action="store_true", help="skip comparing each piece of text with the pixels behind it")
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
     args = ap.parse_args()
 
@@ -171,11 +300,32 @@ def main() -> None:
         total = page.evaluate("Deck.total")
         report["total"] = total
         page.evaluate("Deck.rest(true)")
+        contrast_check = not args.no_contrast
+        if contrast_check:
+            try:
+                import io
+                from PIL import Image
+                page.add_style_tag(content=HIDE_TEXT)
+            except ImportError:
+                contrast_check = False
+                report["contrast_skipped"] = "Pillow is not installed"
         shots = []
         for i in parse_slides(args.slides, total):
             page.evaluate("(i) => Deck.go(i)", i)
             page.wait_for_timeout(60)
             info = page.evaluate(PROBE, i)
+            if contrast_check:
+                items = page.evaluate(TEXT_PROBE, i)
+                page.evaluate("document.documentElement.classList.add('deck-probe-notext')")
+                behind = Image.open(io.BytesIO(page.screenshot())).convert("RGB")
+                page.evaluate("document.documentElement.classList.remove('deck-probe-notext')")
+                low = text_contrast(items, behind, args.scale)
+                if low:
+                    info["low_contrast"] = low
+                    info["problems"].append(
+                        f"{len(low)} piece(s) of text are hard to read against what is behind them "
+                        f"(worst: \"{low[0]['text']}\" at {low[0]['contrast']}:1"
+                        + (", on a busy patch" if low[0]["busy_behind"] else "") + ")")
             if not args.no_shots:
                 f = out_dir / f"slide-{i + 1:02d}.png"
                 page.screenshot(path=str(f))

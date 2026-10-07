@@ -192,6 +192,18 @@ or absolute positions in stage px.
 Decoration that runs past the slide edge is clipped. Mark it `data-bleed` so
 `render.py` does not report it as overflow.
 
+`render.py` also compares each piece of text with the pixels really behind it
+(a picture background, a photo, a colored shape) and reports text that is hard
+to read there. Move the text, or put a surface behind it. Large, faint text
+that is decoration and not reading matter (a watermark year, a ghost numeral)
+should carry `aria-hidden="true"`; the check leaves it alone.
+
+In a theme whose background is a picture, the artwork is described in the
+theme's `theme.json` (`backgrounds`, one `description` and one `safe` text area
+per kind of slide). Read it before composing by hand, keep text inside the
+frame, and use `var(--frame-left)` and `var(--frame-right)` rather than
+`var(--frame-x)` when you position against a margin.
+
 ## Deck-wide effects
 
 One rule in `<style data-deck>` in the head reaches every slide.

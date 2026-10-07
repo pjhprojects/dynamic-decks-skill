@@ -9,6 +9,7 @@ and choose which to use. Read this when a user wants to add, change or choose on
 - [Where things live](#where-things-live)
 - [Choosing a theme or icon set for a deck](#choosing-a-theme-or-icon-set-for-a-deck)
 - [Adding a theme from a PowerPoint template](#adding-a-theme-from-a-powerpoint-template)
+- [Backgrounds that are pictures](#backgrounds-that-are-pictures)
 - [Adding a theme from a brand guide or description](#adding-a-theme-from-a-brand-guide-or-description)
 - [What a theme is](#what-a-theme-is)
 - [Adding an icon set](#adding-an-icon-set)
@@ -61,8 +62,10 @@ python scripts/add_theme.py from-pptx Template.pptx --name acme --fonts ./brand-
 
 It reads the template's theme colors, heading and body fonts, the title
 position, size and weight on the slide master, and a logo if the master has
-exactly one small picture. From those it writes the full token set, derives
-the other variant (dark from light, or light from dark), and prints a list of
+exactly one small picture. A background that is more than a flat color is kept
+as a picture (see [Backgrounds that are pictures](#backgrounds-that-are-pictures)).
+From those it writes the full token set, derives the other variant (dark from
+light, or light from dark) when the background is flat, and prints a list of
 what to review. `--preview` builds the sample deck in the new theme and writes
 contact sheets for each variant.
 
@@ -80,7 +83,7 @@ What a template cannot give, and what happens instead:
 |---|---|
 | Fonts are named, not included | The name goes first in the font stack, so it shows where installed. Elsewhere the built-in font is used. Pass `--fonts <folder>` to embed real font files. |
 | Font licensing | Embedding puts the font inside every deck that is shared. Only embed fonts whose license allows that; ask the user. Files flagged by their maker as not embeddable are skipped. |
-| Picture or gradient backgrounds | A flat background color is used. Recreate decoration in the theme's Decor section if it matters. |
+| Picture, gradient or shape artwork backgrounds | Kept as a picture per kind of slide. Exact with LibreOffice installed; without it, shape artwork is left out and reported. |
 | Tints and shades of theme colors | The plain color is used. |
 | Motion, spacing, corner style | The built-in values. `--shape sharp|soft|round` sets corners. |
 | A 4:3 template | Decks are always 16:9; positions are scaled. |
@@ -88,6 +91,91 @@ What a template cannot give, and what happens instead:
 
 A PowerPoint template never converts perfectly. Say so, and treat the first
 result as a draft to review with the user.
+
+## Backgrounds that are pictures
+
+When a template's background is more than one flat color (a photo, a gradient,
+bands or marks drawn with shapes, a logo on the master), the theme keeps it as
+a **picture** instead of trying to rebuild it. A rebuilt background is always a
+little wrong; a picture of it is the brand's own artwork, untouched. There is
+one picture per kind of slide: `content`, `title`, `section`, `closing`.
+
+How the picture is made:
+
+- **With LibreOffice** (`soffice` on the PATH, or `DYNAMIC_DECKS_SOFFICE=/path/to/soffice`):
+  an empty slide of each kind is drawn at 1920 x 1080. Everything the template
+  puts on that kind of slide is in the picture, the logo included, so the theme
+  does not place the logo a second time.
+- **Without it**: a background that is one picture is taken straight from the
+  file, and a plain gradient is written as CSS. Artwork made of shapes cannot be
+  read this way and is left out. The report says so; install LibreOffice and run
+  the command again for an exact copy.
+- A flat background stays a flat color. Small marks (under 2.5% of the slide)
+  are left out and reported; `--backgrounds always` keeps them, and
+  `--backgrounds never` turns pictures off altogether.
+
+Each picture is then **measured once**, so nobody has to look at it again when
+writing slides. The result is in `theme.json` under `backgrounds`:
+
+| Field | Meaning |
+|---|---|
+| `picture` | The file in the theme's `backgrounds/` folder, or the CSS gradient |
+| `safe` | The text area as `[x, y, width, height]` on the 1920 x 1080 stage: where the template's own title and text boxes sit, pulled in from artwork along the edges |
+| `ink`, `text` | Dark or light text, and the exact color, chosen from the pixels under the text area |
+| `calm` | `true` when text can sit straight on the picture; `false` when it is too busy |
+| `panel` | For a busy picture: the color and strength of the panel the theme puts behind the text |
+| `description` | One sentence on where the artwork is, for composing a slide by hand |
+| `from`, `drawn_by_libreoffice` | The template layout it came from, and how it was read |
+
+The theme turns those into rules, so the ordinary layouts need nothing from you:
+
+- The content picture sets `--bg-image`, the margins (`--frame-left`,
+  `--frame-right`, `--frame-top`, `--frame-bottom`) and the text and background
+  colors for the whole deck. A theme on a picture has one look: no dark variant
+  is derived.
+- Title, section and closing slides each get a rule in the theme's Decor
+  section with their picture, margins and colors. A template with no closing
+  layout uses the title's.
+- A busy picture gets `--bg-panel`, a translucent panel over the text area.
+  The rule that draws it is in the theme's Decor and uses `.slide::before`, so
+  in such a theme a custom slide's own decoration needs an element of its own.
+
+After creating such a theme:
+
+1. Run with `--preview` and open `preview/backgrounds.png`: every picture with
+   its text area outlined. Compare it with the template, and show the user.
+2. Look at each picture and rewrite its `description` in `theme.json` in your
+   own words: what must not be covered (a face, a product, a logo), where the
+   quiet space is.
+3. Read the notes. A narrow text area ("1005px of width for text") means fewer
+   columns and shorter lines on every content slide of every deck in this theme.
+
+When writing slides in such a theme:
+
+- Slides that use a layout follow the margins on their own.
+- `data-bg="title"` (or `section`, `closing`) puts any slide on that picture
+  with its margins and colors. `data-bg="none"` gives a flat slide, and so does
+  any `data-tone` other than `plain`.
+- For a custom slide, read the `description` first and keep text inside the
+  frame. Anything positioned by hand may land on the artwork.
+- `render.py` compares every piece of text with the pixels really behind it and
+  reports the ones that are hard to read. Move the text; do not recolor it.
+
+To supply pictures yourself, with a template or without one:
+
+```bash
+python scripts/add_theme.py new --name acme --accent "#E4002B" \
+    --background content=bg.png --background title=cover.jpg --preview
+```
+
+`--background KIND=FILE` works on `from-pptx`, `new` and `from-spec` (in a spec:
+`"backgrounds": {"content": "bg.png"}`). A supplied picture has no text boxes
+to go by, so its largest empty part becomes the text area; a picture with no
+empty part gets the usual margins and a panel. Pictures that are not 16:9 are
+cropped to fit.
+
+Pictures are embedded in every deck built with the theme. The report gives the
+size they add, typically 50 to 300 KB.
 
 ## Adding a theme from a brand guide or description
 
@@ -107,7 +195,8 @@ section slides (default: the accent). For more control, write a JSON spec and
 use `from-spec`; the keys are `name`, `label`, `colors` (`bg`, `text`, `accent`,
 `accent2`, `chart`, `inverse_bg`, `title`), `fonts` (`display`, `body`, `mono`,
 `dir`), `frame` (`x`, `top`, `title_size`, `title_weight`), `shape`, `logo`
-(`light`, `dark`), `icons`, `dark` (false to skip the second variant).
+(`light`, `dark`), `icons`, `dark` (false to skip the second variant),
+`backgrounds` (`content`, `title`, `section`, `closing`: a picture file each).
 
 Colors that would be unreadable are adjusted and listed in the review notes,
 so tell the user when a brand color was changed and why.
@@ -119,9 +208,10 @@ A folder with:
 ```
 themes/acme/
   theme.css     1 fonts (@font-face)  2 tokens on :root  3 variants  4 decor
-  theme.json    name, variants, default variant, icon set, logo files
+  theme.json    name, variants, default variant, icon set, logo files, backgrounds
   fonts/        font files, with their license text
   logo.svg      optional; logo-dark.svg for dark slides
+  backgrounds/  optional; a picture per kind of slide
 ```
 
 - **Tokens** are the contract; `tokens.md` lists them and
