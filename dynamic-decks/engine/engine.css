@@ -96,6 +96,7 @@ html.deck-rest [data-step] {
 html.deck-rest [data-steps-focus] > [data-step] { opacity: 1 !important; }
 
 /* --- Engine chrome (progress bar) ---------------------------------------- */
+/* Off by default. The deck turns it on with data-progress="on"; L toggles it. */
 .deck-progress {
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -112,7 +113,7 @@ html.deck-rest [data-steps-focus] > [data-step] { opacity: 1 !important; }
   background: var(--progress-color, var(--color-accent, currentColor));
   transition: transform var(--dur-base, 300ms) var(--ease-out, ease-out);
 }
-.deck[data-progress="off"] .deck-progress,
+.deck:not(.is-progress-on) .deck-progress,
 .deck.is-chrome-hidden .deck-progress,
 html.deck-embed .deck-progress,
 html.deck-rest .deck-progress { display: none; }

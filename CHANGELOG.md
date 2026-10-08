@@ -55,6 +55,15 @@ Not done from the same report: a render check for "title below a rule" and
 one for soft-edged or doubled lines. With the causes fixed they would have
 nothing to catch, and the comparison sheet shows both at a glance.
 
+Also in this release:
+
+- **The progress bar is off by default.** `L` shows or hides it while
+  presenting, from the audience window or the presenter window.
+  `<main class="deck" data-progress="on">` starts a deck with it shown, and
+  `data-progress="off"` on a slide still hides it there. Decks already built
+  keep the engine they were built with; rebuilding one from its source applies
+  the new default.
+
 ## 1.3.0 (2026-10-07)
 
 Two faults reported from a real company template, reproduced on templates

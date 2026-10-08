@@ -78,7 +78,7 @@ That last one is edit mode: press `E`, click the thing you mean, paste the refer
 
 - **Keys and clickers:** arrows, space, Page Up and Page Down, Home and End, a slide number then Enter. Click and swipe also work.
 - **Presenter window** (`S`): current slide, next slide, notes, timer and clock, kept in sync with the audience window, with no server.
-- **Overview grid** (`O`), **blank screen** (`B`), **full screen** (`F`), **notes on the same screen** (`N`).
+- **Overview grid** (`O`), **blank screen** (`B`), **full screen** (`F`), **notes on the same screen** (`N`), **progress bar** (`L`, off until you press it).
 - **PDF export:** slides only (`P`), or one page per slide with its notes (`Shift+P`).
 - **Deep links:** `deck.html#12` or `deck.html#pricing` opens on that slide.
 - **One file, offline.** It makes no network requests. The showcase, with seventeen slides and three embedded fonts, is about 430 KB.
@@ -165,6 +165,7 @@ Then ask for a deck. The scripts need Python 3.9 or later. Four things are optio
 | `O` | Overview of all slides |
 | `B` | Blank the screen |
 | `T` | Switch light and dark |
+| `L` | Show or hide the progress bar |
 | `P` / `Shift+P` | Save slides as PDF / print slides with notes |
 | `E` | Edit mode: click an element to copy a reference to it |
 | `?` or `H` | Show every shortcut |
