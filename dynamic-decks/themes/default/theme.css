@@ -176,6 +176,8 @@
   --section-number-gap: auto;      /* auto pins a section's number to the top of the slide; a length sets it on its title */
   --title-gap: 52px;
   --column-gap: var(--space-7);    /* between the two columns of the two-column layout */
+  --card-rule: var(--stroke-base) solid var(--color-text);   /* the line across the top of a card; none removes it */
+  --contrast-floor: 3;             /* the least contrast render.py accepts for text; a theme lowers it only where its template pairs two colors closer than that */
   --title-size: 72px;
   --title-weight: 650;
   --title-color: var(--color-text);

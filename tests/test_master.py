@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import zipfile
 
 from playwright.sync_api import sync_playwright
 
@@ -251,5 +252,95 @@ t.ok("a template with large body text makes the theme's text 10% larger, no more
      token(css, "--text-md"))
 proc, flat, css, meta = make("template.pptx", "default-body")
 t.ok("a template that sets no line spacing keeps the built-in one", token(css, "--leading-snug") == "1.22" and "line spacing" not in proc.stdout)
+
+# ---- a template built the way real ones are: layouts with no type, a title that is not a title placeholder ----
+proc, custom, css, meta = make("template-custom.pptx", "custom")
+out = proc.stdout
+t.ok("layouts that do not say what they are for are matched by name", proc.returncode == 0
+     and 'content slides from "Title and Content" (its name says so)' in out and 'title slides from "Title Slide"' in out, out[-600:])
+t.ok("the import is not reported as incomplete", "IMPORT INCOMPLETE" not in out and "no ordinary content layout" not in out)
+t.ok("the theme is recorded under its own name", meta.get("name") == "custom" and "THEME: custom" in css, meta.get("name"))
+t.ok("a text placeholder named Title is read as the title: its size and weight", token(css, "--title-size") == "56px" and token(css, "--title-weight") == "700",
+     token(css, "--title-size") + " " + token(css, "--title-weight"))
+t.ok("and it is not mistaken for the body: bullets and body size come from the text box", token(css, "--bullet-radius") == "var(--radius-pill)"
+     and token(css, "--bullet-width") == "0.3em" and "body text in the template is 18pt" in out, token(css, "--bullet-width"))
+title_rule = re.search(r'\.slide\[data-bg="title"\][^{]*\{([^}]*)\}', css)
+t.ok("title slides keep the template's own color pairing, white on its orange", title_rule is not None
+     and "--color-inverse-bg: #F58220" in title_rule.group(1) and "--color-inverse-text: #FFFFFF" in title_rule.group(1),
+     title_rule.group(1)[:300] if title_rule else "no rule")
+t.ok("the report gives the contrast of that pairing and says why it was kept", "the template sets #FFFFFF text on #F58220, which is 2.6:1" in out
+     and "It was kept because the template sets it" in out)
+t.ok("the render check is told not to report it", title_rule is not None and "--contrast-floor: 2.2" in title_rule.group(1))
+
+anon = OUT / "template-anonymous.pptx"             # the same template with layout names that say nothing
+with zipfile.ZipFile(FIXTURES / "template-custom.pptx") as zin, zipfile.ZipFile(anon, "w", zipfile.ZIP_DEFLATED) as zout:
+    for item in zin.namelist():
+        data = zin.read(item)
+        if re.fullmatch(r"ppt/slideLayouts/slideLayout\d+\.xml", item):
+            number = re.search(r"(\d+)\.xml", item).group(1)
+            data = re.sub(rb'<p:cSld name="[^"]*"', f'<p:cSld name="Custom Layout {number}"'.encode(), data)
+        zout.writestr(item, data)
+proc = run("add_theme.py", "from-pptx", anon, "--name", "anonymous", env=ENV)
+t.ok("with no type and no telling name, the content layout is found by what is on it and how much it is used",
+     'content slides from "Custom Layout 2" (it has a title and one text box, and most slides use it)' in proc.stdout, proc.stdout[-700:])
+proc = run("add_theme.py", "from-pptx", anon, "--name", "picked", "--layout", "content=Custom Layout 4", "--layout", "title=1", env=ENV)
+t.ok("--layout names the layout for a kind of slide, by name or number", proc.returncode == 0
+     and 'content slides from "Custom Layout 4" (it was asked for)' in proc.stdout and 'title slides from "Custom Layout 1" (it was asked for)' in proc.stdout,
+     proc.stdout[-500:])
+proc = run("add_theme.py", "from-pptx", anon, "--name", "picked-wrong", "--layout", "content=Agenda", env=ENV)
+t.ok("a layout that is not there stops with the list of layouts", proc.returncode != 0 and '"Custom Layout 2" (3 slides)' in proc.stderr + proc.stdout
+     and not (lib / "themes" / "picked-wrong").exists(), (proc.stdout + proc.stderr)[-400:])
+
+import _backgrounds  # noqa: E402
+
+with zipfile.ZipFile(FIXTURES / "template-custom.pptx") as zc:
+    layouts = _backgrounds.list_layouts(zc, "ppt/slideMasters/slideMaster1.xml")
+    import xml.etree.ElementTree as ET  # noqa: E402
+    content_xml = ET.fromstring(zc.read(layouts[1]["part"]))
+    title_sp, text_sps = _backgrounds.text_shapes(content_xml)
+t.ok("the title is told from the other text boxes", title_sp is not None and len(text_sps) == 1
+     and title_sp.find("{http://schemas.openxmlformats.org/presentationml/2006/main}nvSpPr/"
+                       "{http://schemas.openxmlformats.org/presentationml/2006/main}cNvPr").get("name") == "Title 1")
+named = _backgrounds.NAMED
+t.ok("layout names are read sensibly", all(named["content"].search(n) for n in ("Title and Content", "Title, Content", "Title & Text", "1 Column", "Standard"))
+     and not any(named["content"].search(n) for n in ("Title Slide", "Title Only", "Title and Vertical Text", "Content with Caption", "Two Content"))
+     and named["title"].search("Cover") and named["section"].search("Section Divider"))
+
+# ---- fonts: an open-licensed font with the same letter widths stands in ---------------------
+def tiny_font(path, family: str) -> None:
+    """A minimal font file with a family name, enough for the import to recognize."""
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+    fb = FontBuilder(1000, isTTF=True)
+    fb.setupGlyphOrder([".notdef", "A"])
+    fb.setupCharacterMap({65: "A"})
+    pen = TTGlyphPen(None)
+    pen.moveTo((0, 0))
+    pen.lineTo((500, 0))
+    pen.lineTo((250, 700))
+    pen.closePath()
+    fb.setupGlyf({".notdef": TTGlyphPen(None).glyph(), "A": pen.glyph()})
+    fb.setupHorizontalMetrics({".notdef": (500, 0), "A": (600, 0)})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": family, "styleName": "Regular"})
+    fb.setupOS2(sTypoAscender=800, usWinAscent=800, usWinDescent=200)
+    fb.setupPost()
+    fb.save(str(path))
+
+
+fonts = OUT / "stand-in-fonts"
+fonts.mkdir(exist_ok=True)
+tiny_font(fonts / "LiberationSans-Regular.ttf", "Liberation Sans")
+proc, f1, css, meta = make("template-custom.pptx", "fonts-auto", "--fonts", fonts)
+t.ok("a template that names Arial takes an embedded Liberation Sans as its stand-in", token(css, "--font-body").startswith('"Arial", "Liberation Sans"')
+     and 'font "Arial" (body) is not embedded; "Liberation Sans" is, and stands in for it' in proc.stdout, token(css, "--font-body"))
+t.ok("and Arial is no longer reported as missing", 'font "Arial" (body) is not embedded: decks will use it only' not in proc.stdout
+     and "which is not embedded" not in run("add_theme.py", "check", "fonts-auto", env=ENV).stdout)
+tiny_font(fonts / "Brandon.ttf", "Brandon")
+proc, f2, css, meta = make("template-custom.pptx", "fonts-alias", "--fonts", fonts, "--font-alias", "Arial=Brandon")
+t.ok("--font-alias names another stand-in", token(css, "--font-body").startswith('"Arial", "Brandon"') and "line breaks may differ" in proc.stdout,
+     token(css, "--font-body"))
+proc, f3, css, meta = make("template-custom.pptx", "fonts-none")
+t.ok("with nothing embedded, the report says which open font would stand in", "Or embed Liberation Sans or Arimo" in proc.stdout, proc.stdout[-500:])
 
 t.done()

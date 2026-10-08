@@ -124,7 +124,7 @@ t.ok("the title may be as wide as its box", 1250 <= px(css, "--title-measure") <
 t.ok("the rule under the title sets how tall a title may be", 130 <= px(css, "--title-max") <= 150 and area.get("lines") == 2 and area.get("room") == px(css, "--title-max"),
      (token(css, "--title-max"), area))
 t.ok("theme.json records the two boxes", len(area.get("box") or []) == 4 and len(meta["backgrounds"]["content"].get("body_area") or []) == 4)
-t.ok("the report says how much room a title has", "the template draws something under the title, so a title has room for 2 lines" in rule_report)
+t.ok("the report says how much room a title has", "something is drawn under the title, so a title has room for 2 lines" in rule_report)
 
 proc, band, bcss, bmeta = make("template-band.pptx", "band")
 t.ok("a title box on a band stays on the band", 24 <= px(bcss, "--frame-top") <= 60 and token(bcss, "--title-anchor") == "center", token(bcss, "--frame-top"))
@@ -196,5 +196,52 @@ starter = OUT / "fidelity-brand-starter.html"
 build(STARTER_SRC, starter, "--theme", "brand", env=ENV)
 proc = run("render.py", starter, "--out", OUT / "fidelity-brand-render", "--no-shots")
 t.ok("without a rule or band, two-line titles are not reported", "stays above it" not in proc.stdout, proc.stdout[-400:])
+
+# ---- a template built the way real ones are (see make_templates.py: custom) --------------------
+proc, custom, ccss, cmeta = make("template-custom.pptx", "custom", "--preview")
+cpic = Image.open(custom / "backgrounds" / "content.webp").convert("RGB") if (custom / "backgrounds" / "content.webp").is_file() else None
+t.ok("its content layout is read: a picture, with the title's area above the rule", cpic is not None and px(ccss, "--title-max") > 100
+     and token(ccss, "--title-anchor") == "end" and 55 <= px(ccss, "--frame-top") <= 90, (token(ccss, "--title-max"), token(ccss, "--frame-top")))
+if cpic is not None:
+    # the rule is at 19% of the height: rows 408 to 412 of 2160. LibreOffice used to add a gray shadow under it.
+    below = [cpic.getpixel((1900, y)) for y in range(416, 440)]
+    t.ok("a rule whose shadow the template switched off is drawn without one", all(c == (255, 255, 255) for c in below), below[:6])
+    t.ok("and the rule itself is exact", cpic.getpixel((1900, 410)) == (245, 130, 32), cpic.getpixel((1900, 410)))
+t.ok("a card's top line is dropped where it would sit under the template's rule", token(ccss, "--card-rule") == "none")
+compare = custom / "preview" / "compare.png"
+t.ok("--preview draws the template's own slides beside the theme's", compare.is_file() and Image.open(compare).width > 1500
+     and "the template beside this theme, same words on both" in proc.stdout and "LOOK AT THIS FIRST" in proc.stdout, proc.stdout[-900:])
+
+custom_deck = OUT / "fidelity-custom.html"
+build(STARTER_SRC, custom_deck, "--theme", "custom", env=ENV)
+proc = run("render.py", custom_deck, "--out", OUT / "fidelity-custom-render", "--json")
+report = json.loads(proc.stdout) if proc.stdout.strip().startswith("{") else {"slides": [{"number": 0, "low_contrast": "no report"}]}
+low = {s["number"]: s["low_contrast"] for s in report["slides"] if s.get("low_contrast")}
+t.ok("the brand's own white on orange is not reported as hard to read", not low, low)
+g = geometry(custom_deck, ("s1",)) if False else None   # (the starter has no ids; positions are checked on the small deck below)
+small_deck = OUT / "fidelity-custom-small.html"
+build(DECK, small_deck, "--theme", "custom", env=ENV)
+g = geometry(small_deck, ("s-one",))
+RULE_Y = round(0.19 * 1080)
+t.ok("in the deck, the title is above the rule and the body below, as in the template", g["s-one"]["textBottom"] <= RULE_Y and g["s-one"]["body"] > RULE_Y, g["s-one"])
+
+# the route that was reported: the content picture made by hand and passed alongside the template
+hand = OUT / "hand-content.png"
+if cpic is not None:
+    cpic.save(hand)
+proc, handed, hcss, hmeta = make("template-custom.pptx", "handed", "--background", f"content={hand}")
+t.ok("a picture supplied alongside a template keeps the template's text boxes", px(hcss, "--frame-top") == px(ccss, "--frame-top")
+     and px(hcss, "--title-max") == px(ccss, "--title-max")
+     and 'the content picture was supplied by hand; text goes where the template\'s "Title and Content" layout puts it' in proc.stdout,
+     (token(hcss, "--frame-top"), token(hcss, "--title-max"), proc.stdout[-300:]))
+proc = run("add_theme.py", "new", "--name", "handed-alone", "--accent", "#F58220", "--background", f"content={hand}", env=ENV)
+acss = (lib / "themes" / "handed-alone" / "theme.css").read_text(encoding="utf-8")
+t.ok("with no template, a rule across the top of a picture is taken as the line under the title", px(acss, "--title-max") > 100
+     and token(acss, "--title-anchor") == "end" and "a rule runs across the top of the content picture" in proc.stdout,
+     (token(acss, "--title-max"), proc.stdout[-300:]))
+alone_deck = OUT / "fidelity-handed-alone.html"
+build(DECK, alone_deck, "--theme", "handed-alone", env=ENV)
+g = geometry(alone_deck, ("s-one",))
+t.ok("and titles go above it, the body below", g["s-one"]["textBottom"] <= RULE_Y and g["s-one"]["body"] > RULE_Y, g["s-one"])
 
 t.done()

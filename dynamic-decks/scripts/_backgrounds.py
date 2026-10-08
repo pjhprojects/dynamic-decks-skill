@@ -87,30 +87,136 @@ def rels_of(z: zipfile.ZipFile, part: str) -> dict[str, tuple[str, str]]:
     return out
 
 
-def find_layouts(z: zipfile.ZipFile, master_part: str) -> dict[str, dict]:
-    """Pick the layout that stands for each kind of slide.
+NAMED = {                                       # what layouts are usually called, for templates that give no type
+    "title": re.compile(r"^(title|cover|opening|front)( slide| page)?( \d+)?$|title slide|cover slide", re.I),
+    "section": re.compile(r"section|divider|chapter|break|transition", re.I),
+    "content": re.compile(r"title\s*(and|&|\+|,|with)?\s*(content|text|body|bullets?)\b(?! with)|^(content|text|bullets?|body|standard|default|basic)"
+                          r"( slide)?( \d+)?$|^(1|one)[ -]?(column|content)", re.I),
+}
+FOOTER_TYPES = ("dt", "ftr", "sldNum", "hdr")
 
-    Returns kind -> {part, name, type}. 'closing' is only present when the
-    template has a layout named for it; otherwise closing slides use the title's.
+
+def text_shapes(root, size: tuple[int, int] | None = None) -> tuple:
+    """A layout's text placeholders as (the title's shape or None, the other text shapes).
+
+    The title is the title placeholder when there is one. Templates do not
+    always have one: the box may be an ordinary text placeholder that only its
+    name ("Title 1") marks as the title, or nothing but its place, a short box
+    above all the others. Both count, so that such a layout is read like any other.
     """
+    tree = root.find("p:cSld/p:spTree", NS) if root is not None else None
+    texts, title = [], None
+    for sp in (tree.findall("p:sp", NS) if tree is not None else []):
+        ph = sp.find("p:nvSpPr/p:nvPr/p:ph", NS)
+        if ph is None or ph.get("type") in FOOTER_TYPES:
+            continue
+        if ph.get("type") in TITLE_TYPES and title is None:
+            title = sp
+        elif ph.get("type") in BODY_TYPES:
+            texts.append(sp)
+    if title is None:
+        named = [sp for sp in texts if re.match(r"\s*title\b", (sp.find("p:nvSpPr/p:cNvPr", NS).get("name") or ""), re.I)
+                 and "sub" not in (sp.find("p:nvSpPr/p:cNvPr", NS).get("name") or "").lower()]
+        if named:
+            title = named[0]
+        elif len(texts) >= 2:
+            def frame(sp):
+                off, ext = sp.find("p:spPr/a:xfrm/a:off", NS), sp.find("p:spPr/a:xfrm/a:ext", NS)
+                return (int(off.get("y")), int(ext.get("cy"))) if off is not None and ext is not None else None
+            placed = [(frame(sp), sp) for sp in texts if frame(sp)]
+            if len(placed) == len(texts):
+                placed.sort(key=lambda item: item[0][0])
+                (top, tall), first = placed[0]
+                slide_h = size[1] if size else 6858000
+                if tall < 0.25 * slide_h and all(top + tall <= other[0][0] + 0.02 * slide_h for other in placed[1:]):
+                    title = first
+        if title is not None:
+            texts = [sp for sp in texts if sp is not title]
+    return title, texts
+
+
+def list_layouts(z: zipfile.ZipFile, master_part: str) -> list[dict]:
+    """Every layout of a master, in PowerPoint's order: part, name, type, how many slides use it, what text it holds."""
+    names = set(z.namelist())
+    used: dict[str, int] = {}
+    for part in (n for n in names if re.fullmatch(r"ppt/slides/[^/]+\.xml", n)):
+        layout = next((t for typ, t in rels_of(z, part).values() if typ == "slideLayout"), None)
+        if layout:
+            used[layout] = used.get(layout, 0) + 1
     layouts = []
     for typ, target in rels_of(z, master_part).values():
-        if typ != "slideLayout" or target not in z.namelist():
+        if typ != "slideLayout" or target not in names:
             continue
         root = ET.fromstring(z.read(target))
         csld = root.find("p:cSld", NS)
-        layouts.append({"part": target, "type": root.get("type", ""), "name": (csld.get("name") if csld is not None else "") or ""})
+        title, texts = text_shapes(root)
+        layouts.append({"part": target, "type": root.get("type", ""), "name": (csld.get("name") if csld is not None else "") or "",
+                        "slides": used.get(target, 0), "has_title": title is not None, "texts": len(texts)})
     layouts.sort(key=lambda entry: [int(n) for n in re.findall(r"\d+", entry["part"])])
+    return layouts
+
+
+def describe_layouts(layouts: list[dict]) -> str:
+    return ", ".join(f'{i} "{entry["name"] or entry["type"] or "unnamed"}"'
+                     + (f' ({entry["slides"]} slide{"" if entry["slides"] == 1 else "s"})' if entry["slides"] else "")
+                     for i, entry in enumerate(layouts, 1))
+
+
+def find_layouts(z: zipfile.ZipFile, master_part: str, picks: dict | None = None, problems: list | None = None) -> dict[str, dict]:
+    """Pick the layout that stands for each kind of slide.
+
+    Returns kind -> {part, name, type, how}. `picks` names a layout for a kind
+    outright (a number from 1, or a name). Otherwise a layout is known by its
+    type; when the template gives none, as custom layouts do not, by its name;
+    and for the content kind, failing both, by what is on it: a title and one
+    text box, and of those the one most slides use. 'closing' is only present
+    when a layout is named for it; otherwise closing slides use the title's.
+    A pick that matches nothing is added to `problems`.
+    """
+    layouts = list_layouts(z, master_part)
     chosen: dict[str, dict] = {}
-    for kind, wanted in LAYOUT_TYPES.items():
-        for typ in wanted:
-            match = next((entry for entry in layouts if entry["type"] == typ), None)
+
+    def take(kind: str, entry: dict, how: str) -> None:
+        chosen[kind] = dict(entry, how=how)
+
+    for kind, wanted in (picks or {}).items():
+        text = str(wanted).strip()
+        match = None
+        if text.isdigit() and 1 <= int(text) <= len(layouts):
+            match = layouts[int(text) - 1]
+        else:
+            exact = [e for e in layouts if e["name"].lower() == text.lower()]
+            close = exact or [e for e in layouts if text.lower() in e["name"].lower()]
+            match = close[0] if len(close) == 1 or exact else None
+        if match is not None and kind in KINDS:
+            take(kind, match, "it was asked for")
+        elif problems is not None:
+            problems.append(f'--layout {kind}="{text}" matches no single layout')
+    taken = lambda: {e["part"] for e in chosen.values()}          # noqa: E731
+    for kind in ("title", "section", "content"):
+        if kind in chosen:
+            continue
+        for typ in LAYOUT_TYPES[kind]:
+            match = next((e for e in layouts if e["type"] == typ and e["part"] not in taken()), None)
             if match:
-                chosen[kind] = match
+                take(kind, match, "its type says so")
                 break
-    closing = next((entry for entry in layouts if CLOSING_NAMES.search(entry["name"]) and entry is not chosen.get("title")), None)
-    if closing:
-        chosen["closing"] = closing
+    for kind in ("title", "section", "content"):
+        if kind in chosen:
+            continue
+        named = [e for e in layouts if NAMED[kind].search(e["name"]) and e["part"] not in taken()
+                 and (kind != "content" or e["texts"] >= 1)]
+        if named:
+            take(kind, max(named, key=lambda e: e["slides"]) if kind == "content" else named[0], "its name says so")
+    if "content" not in chosen:
+        likely = [e for e in layouts if e["has_title"] and e["texts"] == 1 and e["part"] not in taken()]
+        if likely:
+            best = max(likely, key=lambda e: e["slides"])
+            take("content", best, "it has a title and one text box" + (", and most slides use it" if best["slides"] else ""))
+    if "closing" not in chosen:
+        closing = next((e for e in layouts if CLOSING_NAMES.search(e["name"]) and e["part"] not in taken()), None)
+        if closing:
+            take("closing", closing, "its name says so")
     return chosen
 
 
@@ -125,8 +231,61 @@ def soffice() -> str | None:
     return shutil.which("soffice") or shutil.which("libreoffice")
 
 
-def one_slide_copy(src: Path, layout_part: str, dest: Path) -> None:
-    """Write a copy of the template holding a single empty slide on one layout."""
+SHAPE = re.compile(rb"<p:(sp|cxnSp|pic)\b.*?</p:\1>", re.S)
+SHAPE_PROPS = re.compile(rb"<p:spPr\b.*?</p:spPr>", re.S)
+
+
+def cancel_effects(xml: bytes) -> bytes:
+    """Make a shape's "no effects" explicit enough for LibreOffice.
+
+    A PowerPoint shape can carry a style that asks for one of the theme's
+    effects, usually a shadow, and then switch it off with an empty effect
+    list of its own. PowerPoint honors the empty list. LibreOffice ignores it
+    and draws the shadow, which turns a thin rule into a rule with a gray
+    smear under it. Pointing such a shape's style at "no effect" gives the
+    same picture in both.
+    """
+    def fix(match):
+        shape = match.group(0)
+        props = SHAPE_PROPS.search(shape)
+        if props is None or b"<a:effectLst/>" not in props.group(0):
+            return shape
+        return re.sub(rb'(<a:effectRef\b[^>]*\bidx=")[1-9]\d*(")', rb"\g<1>0\2", shape)
+    return SHAPE.sub(fix, xml)
+
+
+SAMPLE = {"title": "A title for this slide", "sub": "A line of supporting text",
+          "body": ["First point", ("A detail under it", 1), "Second point"]}
+
+
+def sample_slide(layout_xml: bytes, points: bool = True) -> str:
+    """A slide that fills a layout's own placeholders with a few words, to see how the template sets text there.
+
+    `points` puts bullet points in the first text box (a content slide);
+    without it every text box gets one supporting line (a title or section slide).
+    """
+    root = ET.fromstring(layout_xml)
+    title, texts = text_shapes(root)
+    shapes, n = [], 2
+    for sp in ([title] if title is not None else []) + texts:
+        ph = sp.find("p:nvSpPr/p:nvPr/p:ph", NS)
+        attrs = "".join(f' {k}="{v}"' for k, v in ph.attrib.items() if k in ("type", "idx", "sz", "orient"))
+        if sp is title:
+            paras = [(SAMPLE["title"], 0)]
+        elif not points or ph.get("type") == "subTitle" or (title is not None and len(texts) > 1 and sp is not texts[0]):
+            paras = [(SAMPLE["sub"], 0)]
+        else:
+            paras = [(item, 0) if isinstance(item, str) else item for item in SAMPLE["body"]]
+        body = "".join(f'<a:p>{f"<a:pPr lvl=\"{lvl}\"/>" if lvl else ""}<a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p>' for text, lvl in paras)
+        shapes.append(f'<p:sp><p:nvSpPr><p:cNvPr id="{n}" name="Sample {n}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>'
+                      f'<p:nvPr><p:ph{attrs}/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{body}</p:txBody></p:sp>')
+        n += 1
+    return SLIDE_XML.replace("<p:grpSpPr/></p:spTree>", "<p:grpSpPr/>" + "".join(shapes) + "</p:spTree>")
+
+
+def one_slide_copy(src: Path, layout_part: str, dest: Path, filled: str = "") -> None:
+    """Write a copy of the template holding a single slide on one layout: empty, or `filled` with sample
+    text ("points" for a content slide, "line" for a title or section slide)."""
     with zipfile.ZipFile(src) as z:
         names = z.namelist()
         old_slides = {n for n in names if re.fullmatch(r"ppt/slides/(_rels/)?[^/]+", n)}
@@ -169,16 +328,21 @@ def one_slide_copy(src: Path, layout_part: str, dest: Path) -> None:
             for name in names:
                 if name in old_slides or name in ("ppt/presentation.xml", "ppt/_rels/presentation.xml.rels", "[Content_Types].xml"):
                     continue
-                out.writestr(name, z.read(name))
+                data = z.read(name)
+                if re.fullmatch(r"ppt/slide(Masters|Layouts)/[^/]+\.xml", name):
+                    data = cancel_effects(data)
+                out.writestr(name, data)
             out.writestr("[Content_Types].xml", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + types_xml)
             out.writestr("ppt/presentation.xml", pres)
             out.writestr("ppt/_rels/presentation.xml.rels", '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + rels_xml)
-            out.writestr("ppt/slides/slide1.xml", SLIDE_XML)
+            out.writestr("ppt/slides/slide1.xml", sample_slide(z.read(layout_part), filled == "points") if filled else SLIDE_XML)
             out.writestr("ppt/slides/_rels/slide1.xml.rels", slide_rels)
 
 
-def render(src: Path, layouts: dict[str, dict], work: Path, timeout: int = 180) -> tuple[dict[str, Path], str]:
-    """Draw each kind's empty slide. Returns (kind -> PNG, why nothing came back)."""
+def render(src: Path, layouts: dict[str, dict], work: Path, timeout: int = 180,
+           filled: bool = False, size: tuple[int, int] | None = None) -> tuple[dict[str, Path], str]:
+    """Draw each kind's slide: empty for a background, or `filled` with sample text to show how the
+    template itself sets a slide of that kind. Returns (kind -> PNG, why nothing came back)."""
     program = soffice()
     if not program:
         return {}, "LibreOffice is not installed"
@@ -187,12 +351,12 @@ def render(src: Path, layouts: dict[str, dict], work: Path, timeout: int = 180) 
     for kind, entry in layouts.items():
         deck = work / f"{kind}.pptx"
         try:
-            one_slide_copy(src, entry["part"], deck)
+            one_slide_copy(src, entry["part"], deck, ("points" if kind == "content" else "line") if filled else "")
         except Exception as exc:  # noqa: BLE001
             return {}, f"could not prepare the template for rendering ({exc})"
         decks.append(deck)
     size = ('png:impress_png_Export:{"PixelWidth":{"type":"long","value":"%d"},"PixelHeight":{"type":"long","value":"%d"}}'
-            % (MAX_W, MAX_H))
+            % (size or (MAX_W, MAX_H)))
     profile = work / "profile"                  # its own profile, so a running LibreOffice is left alone
     try:
         proc = subprocess.run([program, f"-env:UserInstallation={profile.as_uri()}", "--headless", "--convert-to", size,
@@ -218,14 +382,8 @@ INSETS = {"lIns": 91440, "tIns": 45720, "rIns": 91440, "bIns": 45720}      # Pow
 
 
 def _placeholders(root, role: str) -> list:
-    tree = root.find("p:cSld/p:spTree", NS) if root is not None else None
-    wanted = TITLE_TYPES if role == "title" else BODY_TYPES
-    out = []
-    for sp in (tree.findall("p:sp", NS) if tree is not None else []):
-        ph = sp.find("p:nvSpPr/p:nvPr/p:ph", NS)
-        if ph is not None and ph.get("type") in wanted:
-            out.append(sp)
-    return out
+    title, texts = text_shapes(root)
+    return ([title] if title is not None else []) if role == "title" else texts
 
 
 def _text_box(sp, fallback, size: tuple[int, int]) -> tuple | None:
@@ -285,6 +443,14 @@ def text_boxes(layout, master, size: tuple[int, int]) -> dict:
             break
     return {"title": _union(titles[:1]), "body": _union(bodies),
             "anchor": {"ctr": "center", "b": "end"}.get(anchor or "t", "start")}
+
+
+def content_boxes(layout, master, size: tuple[int, int]) -> dict | None:
+    """text_boxes for a content layout, or None when it does not have a title above a text box."""
+    boxes = text_boxes(layout, master, size)
+    if boxes["title"] and boxes["body"] and boxes["title"][1] + boxes["title"][3] <= boxes["body"][1] + 12:
+        return boxes
+    return None
 
 
 def text_area(layout, master, size: tuple[int, int]) -> tuple | None:
@@ -462,6 +628,38 @@ def _room_below(full, title: tuple, body: tuple) -> int | None:
     return None
 
 
+def _title_rule(full, dominant: tuple) -> tuple | None:
+    """A thin horizontal rule across the upper part of a picture: (left, right, top, bottom) in stage px, or None.
+
+    For a picture that comes with no text boxes. A line that crosses most of
+    the slide between 6% and 35% of the way down, with clear space above it,
+    is where a template separates the title from the body.
+    """
+    from PIL import Image, ImageChops
+    f = full.width / STAGE_W
+    bands = ImageChops.difference(full, Image.new("RGB", full.size, tuple(round(c) for c in dominant))).split()
+    mask = ImageChops.lighter(ImageChops.lighter(bands[0], bands[1]), bands[2]).point(lambda v: 255 if v > 24 else 0)
+    rows = mask.resize((1, full.height), Image.BOX).tobytes()
+    lo, hi = int(0.06 * full.height), int(0.35 * full.height)
+    y = lo
+    while y < hi:
+        if rows[y] > 140:                         # most of this row is not background
+            end = y
+            while end < full.height and rows[end] > 140:
+                end += 1
+            thin = (end - y) <= 0.012 * full.height
+            above = rows[max(0, y - int(60 * f)):y]
+            if thin and above and sum(above) / len(above) < 26:
+                cols = mask.crop((0, y, full.width, end)).resize((full.width, 1), Image.BOX).tobytes()
+                on = [x for x, v in enumerate(cols) if v > 127]
+                if on and (on[-1] - on[0]) >= 0.55 * full.width:
+                    return (round(on[0] / f), round((on[-1] + 1) / f), round(y / f), round(end / f))
+            y = end + 1
+        else:
+            y += 1
+    return None
+
+
 def _largest_clear(far: list, w: int, h: int, within: tuple) -> tuple | None:
     """The biggest rectangle inside `within` with no artwork in it, for a picture that comes with no text boxes.
 
@@ -545,9 +743,18 @@ def measure(im, safe: tuple | None, boxes: dict | None = None, search: bool = Tr
     elif safe is not None:
         safe, trimmed = _fit(safe, far, w, h) if plain else (safe, {})
     else:
-        if search and plain:
-            found = _largest_clear(far, w, h, DEFAULT_SAFE)
-        safe = found or DEFAULT_SAFE
+        rule = _title_rule(full, dominant) if search and plain else None
+        if rule:                                  # no boxes, but a rule to go by: title above it, body below
+            left, right = max(64, rule[0]), min(STAGE_W - 64, rule[1])
+            top = max(40, rule[2] - 162)
+            boxes = {"anchor": "end"}
+            zones = {"title": (left, top, right - left, rule[2] - 12 - top),
+                     "body": (left, rule[3] + 28, right - left, DEFAULT_SAFE[1] + DEFAULT_SAFE[3] - rule[3] - 28)}
+            safe, found = _union([zones["title"], zones["body"]]), _union([zones["title"], zones["body"]])
+        else:
+            if search and plain:
+                found = _largest_clear(far, w, h, DEFAULT_SAFE)
+            safe = found or DEFAULT_SAFE
     x0, y0, bw, bh = (int(v) for v in safe)
     under = _under(px, zones["body"] if zones else safe, w, h)
     crop = under["pixels"]
@@ -575,7 +782,8 @@ def measure(im, safe: tuple | None, boxes: dict | None = None, search: bool = Tr
     }
     if zones:
         title = _under(px, zones["title"], w, h)
-        out["zones"] = {"title": tuple(zones["title"]), "body": tuple(zones["body"]),
+        out["zones"] = {"title": tuple(zones["title"]), "body": tuple(zones["body"]), "anchor": (boxes or {}).get("anchor", "start"),
+                        "from_rule": bool(boxes) and "title" not in boxes,
                         "title_colors": {k: title[k] for k in ("mean", "dark", "light")},
                         "title_room": _room_below(full, zones["title"], zones["body"])}
     return out
@@ -667,7 +875,8 @@ def _entry(im, safe, dark_text: str, light_text: str, mode: str, boxes: dict | N
     if stats.get("zones"):
         colors = dict(stats["zones"]["title_colors"], overall=stats["overall"])
         over = choose_ink(colors, dark_text, light_text)
-        entry["zones"] = {"title": stats["zones"]["title"], "body": stats["zones"]["body"], "anchor": (boxes or {}).get("anchor", "start"),
+        entry["zones"] = {"title": stats["zones"]["title"], "body": stats["zones"]["body"], "anchor": stats["zones"]["anchor"],
+                          "from_rule": stats["zones"]["from_rule"],
                           "room": stats["zones"]["title_room"],
                           "title_text": over["text"], "title_bg": over["bg"], "title_ink": over["ink"], "title_calm": over["calm"]}
     return entry
@@ -747,7 +956,7 @@ def _same_look(a: dict, b: dict) -> bool:
 
 def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[int, int], resolve,
                   dark_text: str, light_text: str, mode: str = "auto", work: Path | None = None,
-                  more: bool = True) -> tuple[dict, dict, list[str]]:
+                  more: bool = True, layouts: dict | None = None) -> tuple[dict, dict, list[str]]:
     """Backgrounds from a template. Returns (kind -> entry, name -> entry, notes).
 
     The first dict has the four kinds of slide (content, title, section,
@@ -764,9 +973,9 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
         from PIL import Image
     except ImportError:
         return {}, {}, ["Pillow is not installed, so the template's backgrounds could not be examined; flat colors were used"]
-    layouts = find_layouts(z, master_part)
+    layouts = find_layouts(z, master_part) if layouts is None else layouts
     if "content" not in layouts:
-        return {}, {}, ["the template has no ordinary content layout; its backgrounds were not examined"]
+        return {}, {}, []                         # the caller reports this: nothing can be measured without it
     others = other_layouts(z, master_part, {entry["part"] for entry in layouts.values()}) if more else []
     if len(others) > MAX_MORE:
         notes.append(f"the template has {len(others)} more layouts with a look of their own; the first {MAX_MORE} were examined")
@@ -781,9 +990,7 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
     def examine(key: str, entry: dict, what: str, hero: bool) -> dict | None:
         layout = ET.fromstring(z.read(entry["part"]))
         safe = text_area(layout, master, size)
-        boxes = text_boxes(layout, master, size) if key == "content" else None
-        if boxes and not (boxes["title"] and boxes["body"] and boxes["title"][1] + boxes["title"][3] <= boxes["body"][1] + 12):
-            boxes = None                          # no title above a text box: the one rectangle will have to do
+        boxes = content_boxes(layout, master, size) if key == "content" else None    # None: the one rectangle will have to do
         fill, el, owner = fill_of(layout, master, entry["part"], master_part)
         shapes = art_count(layout, master)
         css = css_gradient(el, resolve) if fill == "gradient" else None
@@ -857,8 +1064,16 @@ def from_template(src: Path, z: zipfile.ZipFile, master_part: str, size: tuple[i
     return out, extra, notes
 
 
-def from_files(files: dict[str, Path], dark_text: str, light_text: str) -> tuple[dict, list[str]]:
-    """Backgrounds from pictures the user supplies, one per kind of slide."""
+def from_files(files: dict[str, Path], dark_text: str, light_text: str, known: dict | None = None) -> tuple[dict, list[str]]:
+    """Backgrounds from pictures the user supplies, one per kind of slide.
+
+    `known` is what a template says about where text goes on each kind of
+    slide: kind -> {"safe": area, "boxes": title and text box, "layout": name}.
+    With it the picture is only measured for color; the template's boxes
+    stand. Without it the picture is all there is: a rule across its top is
+    taken as the line under the title, and failing that its empty part is the
+    text area.
+    """
     from PIL import Image
     out, notes = {}, []
     for kind, path in files.items():
@@ -881,9 +1096,14 @@ def from_files(files: dict[str, Path], dark_text: str, light_text: str) -> tuple
                          f"at least {STAGE_W}px wide, ideally {MAX_W}px")
         wide = max(STAGE_W, min(MAX_W, im.width))    # as sharp as the file has it, up to twice the stage
         im = im.resize((wide, wide * STAGE_H // STAGE_W), Image.LANCZOS)
-        result = _entry(im, None, dark_text, light_text, "always")
+        told = (known or {}).get(kind) or ((known or {}).get("title") if kind == "closing" else None) or {}
+        result = _entry(im, told.get("safe"), dark_text, light_text, "always", told.get("boxes"), search=not told)
         if "flat" not in result:
             result.update(layout=Path(path).name, rendered=False)
+            if told:
+                notes.append(f"the {kind} picture was supplied by hand; text goes where the template's \"{told.get('layout', kind)}\" layout puts it")
+            elif (result.get("zones") or {}).get("from_rule"):
+                notes.append(f"a rule runs across the top of the {kind} picture: titles go above it and the body below it")
         out[kind] = result
     return out, notes
 

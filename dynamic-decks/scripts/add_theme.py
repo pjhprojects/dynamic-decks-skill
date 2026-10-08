@@ -56,6 +56,13 @@ NS = {
 }
 DEFAULT_DIR = _deck.SKILL_DIR / "themes" / "default"
 BUNDLED = {"bricolage grotesque", "hanken grotesk", "jetbrains mono"}
+# Open-licensed fonts drawn to the same letter widths as common office fonts: text set in one
+# takes the same room as in the other, so a layout made for Arial holds in Liberation Sans.
+STAND_INS = {
+    "arial": ["Liberation Sans", "Arimo"], "helvetica": ["Liberation Sans", "Arimo"],
+    "times new roman": ["Liberation Serif", "Tinos"], "courier new": ["Liberation Mono", "Cousine"],
+    "calibri": ["Carlito"], "cambria": ["Caladea"], "arial narrow": ["Liberation Sans Narrow"],
+}
 STATUS = {
     "light": {"positive": "#0B7D43", "negative": "#C62F2F", "warning": "#9A6500"},
     "dark": {"positive": "#4CC98A", "negative": "#FF7A7A", "warning": "#F0B43C"},
@@ -106,7 +113,7 @@ def _rels(z: zipfile.ZipFile, part: str) -> dict[str, tuple[str, str]]:
 
 
 def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "auto",
-              master_choice: str | None = None, more_backgrounds: bool = True) -> tuple[dict, list[str]]:
+              master_choice: str | None = None, more_backgrounds: bool = True, layout_picks: dict | None = None) -> tuple[dict, list[str]]:
     """Pull brand values out of a .pptx or .potx. Returns (spec, notes)."""
     notes: list[str] = []
     try:
@@ -183,11 +190,25 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
 
     # Backgrounds: each kind of slide drawn empty, then measured (see _backgrounds.py)
     light = scheme.get(cmap.get("bg1", "lt1"), "#FFFFFF")
+    # Which layout stands for which kind of slide. Everything read per kind below goes by this.
+    pick_problems: list[str] = []
+    layout_parts = _backgrounds.find_layouts(z, master_part, layout_picks, pick_problems)
+    all_layouts = _backgrounds.list_layouts(z, master_part)
+    if pick_problems:
+        _deck.die("; ".join(pick_problems) + f". The template's layouts are: {_backgrounds.describe_layouts(all_layouts)}")
+    told = [f'{kind} slides from "{entry["name"]}" ({entry["how"]})' for kind, entry in layout_parts.items() if entry["how"] != "its type says so"]
+    if told:
+        notes.append("the template's layouts do not all say what they are for, so they were matched up: " + "; ".join(told)
+                     + ". Pass --layout KIND=NAME to choose another")
+    if "content" not in layout_parts:
+        notes.append("IMPORT INCOMPLETE: could not tell which layout is the ordinary content slide, so backgrounds, margins, title "
+                     "position, bullets and footer were NOT read from the template. Do not patch the theme by hand: run this again with "
+                     f"--layout content=NAME (a name or a number). The layouts are: {_backgrounds.describe_layouts(all_layouts)}")
     kinds, more_kinds, bg_notes = _backgrounds.from_template(
         path, z, master_part, (cx, cy), resolve,
         dark_text=text if luminance(text) < 0.2 else "#111111",
         light_text=light if luminance(light) > 0.8 else "#FFFFFF",
-        mode=backgrounds, work=(extract_to / "backgrounds") if extract_to else None, more=more_backgrounds)
+        mode=backgrounds, work=(extract_to / "backgrounds") if extract_to else None, more=more_backgrounds, layouts=layout_parts)
     notes += bg_notes
     content = kinds.get("content", {})
     picture = "flat" not in content and bool(content)
@@ -201,7 +222,7 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
         notes.append(f"the template's text {text} on its background {bg} has low contrast; check the result")
     drawn_text = []
     if any(entry.get("rendered") for entry in list(kinds.values()) + list(more_kinds.values())):
-        used = [ET.fromstring(z.read(entry["part"])) for entry in _backgrounds.find_layouts(z, master_part).values()]
+        used = [ET.fromstring(z.read(entry["part"])) for entry in layout_parts.values()]
         drawn_text = _backgrounds.artwork_text([master] + used)
 
     fonts = {}
@@ -217,8 +238,13 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
         named = {"+mj": fonts.get("display", ""), "+mn": fonts.get("body", ""), "": fonts.get("body", "")}
         faces = sorted({(named.get(face, face) or "").strip() for _, face in drawn_text} - {""})
         absent = [f for f in faces if have is not None and f.lower() not in have]
+        close = [f for f in absent if any(c.lower() in have for c in STAND_INS.get(f.lower(), []))]
         sample = "; ".join(dict.fromkeys(f'"{words[:40]}"' for words, _ in drawn_text[:3]))
-        if absent:
+        if absent and len(close) == len(absent):
+            notes.append(f"the backgrounds include text that is part of the template ({sample}). It is set in {', '.join(absent)}, "
+                         "which is not installed on this machine; LibreOffice drew it in a font with the same letter widths, so it sits "
+                         "where it should but its letter shapes differ slightly")
+        elif absent:
             notes.append(f"the backgrounds include text that is part of the template ({sample}). It is set in {', '.join(absent)}, "
                          "which is not installed on this machine, so LibreOffice drew it in a stand-in font. Install the font here and "
                          "make the theme again, or compare preview/backgrounds.png with the template")
@@ -300,18 +326,33 @@ def read_pptx(path: Path, extract_to: Path | None = None, backgrounds: str = "au
         spec["master"] = chosen["name"]
 
     # What the master and its layouts say about each kind of slide (see _master.py)
-    layout_parts = _backgrounds.find_layouts(z, master_part)
     layout_xml = {kind: ET.fromstring(z.read(entry["part"])) for kind, entry in layout_parts.items()}
     per_kind: dict[str, dict] = {}
     for kind in ("content", "title", "section", "closing"):
         if kind != "content" and kind not in layout_xml:
             continue
         per_kind[kind] = {"title_align": _master.title_align(master, layout_xml.get(kind))}
+        style = _master.title_style(master, layout_xml.get(kind), px_per_pt, resolve)
+        if kind == "content":                     # the content layout's own title box outranks the master's title style
+            if style["size"]:
+                frame["title_size"] = style["size"]
+            if style["bold"] is not None:
+                frame["title_weight"] = 700 if style["bold"] else 500
+            if style["color"] and style["color"] != text:
+                spec["colors"]["title"] = style["color"]
+        elif style["color"]:
+            per_kind[kind]["title_color"] = style["color"]
+            per_kind[kind]["title_color_set_here"] = style["color_is_own"]
         if kind in ("title", "section"):
             place = _master.hero_place(master, layout_xml[kind], (cx, cy))
             if place:
                 per_kind[kind]["place"] = place
     spec["layouts"] = per_kind
+    spec["_layouts"] = layout_parts               # for the preview; not written into the theme
+    # where each kind of slide's text goes, for pictures supplied by hand with --background
+    spec["text_boxes"] = {kind: {"safe": _backgrounds.text_area(xml, master, (cx, cy)), "layout": layout_parts[kind]["name"],
+                                 "boxes": _backgrounds.content_boxes(xml, master, (cx, cy)) if kind == "content" else None}
+                          for kind, xml in layout_xml.items()}
 
     # Footer label and slide number: where they sit, and whether the template shows them at all
     on_master = [ET.fromstring(z.read(part)) for part in _master.slides_on(z, master_part)]
@@ -559,25 +600,45 @@ def bundled_faces(family: str, out_fonts: Path) -> list[str]:
     return rules
 
 
-def font_stack(family: str | None, role: str, embedded: set[str], notes: list[str], out_fonts: Path, rules: list[str]) -> str:
+def font_stack(family: str | None, role: str, embedded: set[str], notes: list[str], out_fonts: Path, rules: list[str],
+               aliases: dict[str, str] | None = None) -> str:
+    """The font-family value for a role. `aliases` maps a font's name to an embedded font to show where it is not installed."""
     default = _default_tokens()[f"--font-{role}"]
+    generic = "ui-monospace, Menlo, Consolas, monospace" if role == "mono" else "system-ui, -apple-system, \"Segoe UI\", sans-serif"
     if not family:
         for fam in [f.strip().strip("\"'") for f in default.split(",")]:
             if fam.lower() in BUNDLED and not any(f'"{fam}"' in r for r in rules):
                 rules.extend(bundled_faces(fam, out_fonts))
         return default
     low = family.lower()
-    if low in {e.lower() for e in embedded}:
-        return f'"{family}", ' + ("ui-monospace, Menlo, Consolas, monospace" if role == "mono" else "system-ui, -apple-system, \"Segoe UI\", sans-serif")
+    have = {e.lower(): e for e in embedded}
+    if low in have:
+        return f'"{family}", ' + generic
     if low in BUNDLED:
         if not any(f'"{family}"' in r for r in rules):
             rules.extend(bundled_faces(family, out_fonts))
-        generic = "monospace" if role == "mono" else "system-ui, sans-serif"
-        return f'"{family}", {generic}'
+        return f'"{family}", ' + ("monospace" if role == "mono" else "system-ui, sans-serif")
+    # not embedded: is there an embedded font to stand in for it?
+    asked = (aliases or {}).get(low)
+    stand_in = have.get(asked.lower()) if asked else next((have[c.lower()] for c in STAND_INS.get(low, []) if c.lower() in have), None)
+    if asked and not stand_in and asked.lower() in BUNDLED:
+        stand_in = asked
+        if not any(f'"{asked}"' in r for r in rules):
+            rules.extend(bundled_faces(asked, out_fonts))
+    if stand_in:
+        same = any(stand_in.lower() == c.lower() for c in STAND_INS.get(low, []))
+        notes.append(f"font \"{family}\" ({role}) is not embedded; \"{stand_in}\" is, and stands in for it on computers without {family}"
+                     + (" (the two have the same letter widths, so nothing moves)" if same else " (line breaks may differ between the two)"))
+        return f'"{family}", "{stand_in}", ' + generic
+    if asked:
+        notes.append(f"--font-alias names \"{asked}\" for {family}, but no font files for \"{asked}\" were found: pass them with --fonts")
+    offer = STAND_INS.get(low)
     notes.append(
         f"font \"{family}\" ({role}) is not embedded: decks will use it only on computers that have it installed, and fall "
         f"back to the built-in {role} font elsewhere. To embed it, pass --fonts with the font files, if its license allows "
-        "embedding in shared files.")
+        "embedding in shared files."
+        + (f" Or embed {' or '.join(offer)}, which is open-licensed and has the same letter widths: put its files in the --fonts "
+           "folder and it stands in automatically." if offer else ""))
     for fam in [f.strip().strip("\"'") for f in default.split(",")]:
         if fam.lower() in BUNDLED and not any(f'"{fam}"' in r for r in rules):
             rules.extend(bundled_faces(fam, out_fonts))
@@ -598,7 +659,7 @@ GROUPS = [
     ("Type: scale", r"--text-"),
     ("Type: rhythm", r"--(leading|tracking)-"),
     ("Spacing scale", r"--space-"),
-    ("Frame: where the title sits, the margins, the footer", r"--(frame|title|eyebrow|footer|hero|section|column)-"),
+    ("Frame: where the title sits, the margins, the footer", r"--(frame|title|eyebrow|footer|hero|section|column|card|contrast)-"),
     ("Bullets: a drawn shape for each of two levels", r"--bullet-"),
     ("Background picture, and a panel behind the text when the picture is busy", r"--bg-"),
     ("Shape", r"--(radius|stroke|shadow)-"),
@@ -744,7 +805,8 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             seed = hexc(c.get("text", "#111111"))
         except ValueError as exc:
             _deck.die(str(exc))
-        made, bnotes = _backgrounds.from_files(files, seed if luminance(seed) < 0.2 else "#111111", "#FFFFFF")
+        made, bnotes = _backgrounds.from_files(files, seed if luminance(seed) < 0.2 else "#111111", "#FFFFFF",
+                                               {k: v for k, v in (spec.get("text_boxes") or {}).items() if v and v.get("safe")})
         kinds = {k: v for k, v in kinds.items() if not isinstance(v, str)}
         kinds.update(made)
         notes += bnotes
@@ -781,11 +843,17 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         r, fams = add_fonts(Path(font_dir).expanduser(), out_fonts, notes)
         rules += r
         embedded |= fams
+    aliases = {str(k).strip().lower(): str(v).strip() for k, v in (fspec.get("aliases") or {}).items()}
+    for item in getattr(args, "font_alias", None) or []:
+        wanted, _, stand_in = item.partition("=")
+        if not wanted.strip() or not stand_in.strip():
+            _deck.die(f"--font-alias takes NAME=FAMILY, for example Arial=\"Liberation Sans\" (got '{item}')")
+        aliases[wanted.strip().strip("\"'").lower()] = stand_in.strip().strip("\"'")
     for role in ("display", "body", "mono"):
         fam = fspec.get(role)
         if role == "display" and not fam:
             fam = fspec.get("body")
-        tokens[f"--font-{role}"] = font_stack(fam, role, embedded, notes, out_fonts, rules)
+        tokens[f"--font-{role}"] = font_stack(fam, role, embedded, notes, out_fonts, rules, aliases)
 
     # Frame and shape
     frame = spec.get("frame", {}) or {}
@@ -854,8 +922,8 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
         lean = max(0.9, size_pt / 24) if size_pt < 24 else (min(1.1, size_pt / 32) if size_pt > 32 else 1.0)
         lean = round(lean, 2)
         if lean != 1.0:
-            for name in ("--text-sm", "--text-base", "--text-md", "--text-lg"):
-                tokens[name] = f"{round(px_of(name, 0) * lean)}px"
+            for size_token in ("--text-sm", "--text-base", "--text-md", "--text-lg"):
+                tokens[size_token] = f"{round(px_of(size_token, 0) * lean)}px"
         if lean == 1.0:
             notes.append(f"body text in the template is {size_pt:g}pt; the theme keeps its own text sizes, which fit more on a slide")
         else:
@@ -950,6 +1018,11 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             "calm": entry["calm"], "panel": entry["panel"], "art": entry.get("art"),
             "description": entry["description"],
         }
+        if entry.get("text_from_template"):
+            bg_meta[kind]["text_from_template"] = True
+            bg_meta[kind]["ink"] = "light" if luminance(entry["text"]) > 0.5 else "dark"
+            bg_meta[kind]["description"] = re.sub(r"Use (dark|light) text\.$", f"Use {bg_meta[kind]['ink']} text, as the template does.",
+                                                  entry["description"])
         if entry.get("zones"):
             z = entry["zones"]
             bg_meta[kind]["title_area"] = {"box": [round(v) for v in z["title"]], "anchor": z.get("anchor"), "text": z.get("title_text")}
@@ -1025,10 +1098,11 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
                         tokens["--title-size"] = f"{size}px"
                         notes.append(f"the title size was reduced to {size}px so one line fits above what the template draws under it")
                     tokens["--title-max"] = f"{room}px"
+                    tokens["--card-rule"] = "none"   # a line on top of every card, just under the template's own, reads as a doubled rule
                     fits = max(1, int(room // (size * 1.04)))
                     chars = int(px_of("--title-measure", 1000) / (size * 0.5))
                     bg_meta["content"]["title_area"].update(lines=fits, room=room)
-                    notes.append(f"the template draws something under the title, so a title has room for {fits} line{'s' if fits > 1 else ''} "
+                    notes.append(f"something is drawn under the title, so a title has room for {fits} line{'s' if fits > 1 else ''} "
                                  f"of about {chars} characters ({room}px); the render check reports a title that runs into it")
                 # The title may sit on something the body does not: a band, a tint. Its colors then go in a rule
                 # for the slides that show this background, so a flat slide (a tone, data-bg="none") keeps its own.
@@ -1061,7 +1135,38 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
     hero_css = []
     title_entry = kinds.get("title")
     heroes = {kind: (kinds.get(kind) if kind in kinds else title_entry) for kind in ("title", "section", "closing")}
-    if picture or any(e and "flat" not in e for e in heroes.values()):
+
+    def template_ink(kind_names: list[str], on: str, measured: str) -> tuple[str, bool]:
+        """The text color for these kinds of slide: the one the template's layout sets, unless it cannot be read on `on`.
+
+        A pairing the layout sets for itself (white on the brand's orange, say) is kept even where another
+        color would score higher on contrast; the report gives the figure. Under 2:1 the measured color is
+        used instead. A color the layout only inherits from the master is kept when it reads well (3:1).
+        """
+        source = next((per_kind[k] for k in kind_names if (per_kind.get(k) or {}).get("title_color")), {})
+        wanted = source.get("title_color")
+        try:
+            wanted = hexc(wanted) if wanted else None
+        except ValueError:
+            wanted = None
+        if not wanted or wanted == measured:
+            return measured, False
+        ratio = contrast(wanted, on)
+        if not source.get("title_color_set_here", True) and ratio < 3.0:
+            return measured, False               # only inherited from the master, and hard to read here: not a decision to keep
+        if ratio < 2.0:
+            notes.append(f"{kind_names[0]} slides: the template's title color {wanted} is {ratio:.1f}:1 on {on}, too little to read; "
+                         f"{measured} is used instead")
+            return measured, False
+        if ratio < 3.0:
+            notes.append(f"{kind_names[0]} slides: the template sets {wanted} text on {on}, which is {ratio:.1f}:1 (3:1 is usually wanted for "
+                         "large text). It was kept because the template sets it")
+            floors[kind_names[0]] = f"{max(1.5, ratio * 0.85):.1f}"   # so the render check does not report the brand's own pairing
+        return wanted, True
+
+    floors: dict[str, str] = {}
+    stands_out = any(e and "flat" in e and contrast(e["flat"], bg) > 1.3 for e in heroes.values())
+    if picture or stands_out or any(e and "flat" not in e for e in heroes.values()):
         groups: list[tuple[dict | None, list[str]]] = []
         for kind, entry in heroes.items():
             match = next((g for g in groups if g[0] is entry), None)
@@ -1077,10 +1182,13 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
             if entry and "flat" in entry:
                 flat = entry["flat"]
                 ink = "#FFFFFF" if contrast("#FFFFFF", flat) >= 4.5 else (text if luminance(text) < 0.2 else "#111111")
+                ink, _ = template_ink(names, flat, ink)
                 decl.update(inverse_tokens(flat, ink, accent2))
             elif entry:
                 decl["--bg-image"], recorded = picture_value(names[0], entry)
                 decl["--bg-panel"] = panel_value(entry)
+                if entry["calm"]:                  # a panel was chosen for the measured color; without one the template's stands
+                    entry["text"], entry["text_from_template"] = template_ink(names, entry["bg"], entry["text"])
                 decl.update(inverse_tokens(entry["bg"], entry["text"], accent2))
                 safe = entry.get("safe")
                 if safe:
@@ -1095,6 +1203,8 @@ def write_theme(spec: dict, args, notes: list[str]) -> Path:
                     # the section number sits on its title instead of at the top of the slide, where the artwork may be
                     decl["--section-number-gap"] = "var(--space-4)"
                     decl["--text-mega"] = "200px"
+            if names[0] in floors:
+                decl["--contrast-floor"] = floors[names[0]]
             for kind in names:
                 remember(kind, entry if kind in kinds else None, recorded)
             selector = ",\n".join(f'.slide[data-layout="{n}"]:where(:not([data-tone], [data-bg])),\n.slide[data-bg="{n}"]' for n in names)
@@ -1297,7 +1407,11 @@ def check_theme(path: Path) -> tuple[list[str], list[str]]:
         pic = entry["picture"]
         if not pic.startswith(("linear-gradient", "data:")) and not (path / pic).is_file():
             problems.append(f"background picture missing for {kind} slides: {pic}")
-        if entry.get("text") and entry.get("worst") and contrast(entry["text"], entry["worst"]) < 4.5:
+        if entry.get("text_from_template"):
+            if entry.get("text") and entry.get("worst") and contrast(entry["text"], entry["worst"]) < 3:
+                notes.append(f"{kind} slides: the template's own text color {entry['text']} is {contrast(entry['text'], entry['worst']):.1f}:1 "
+                             f"on the hardest part of the background ({entry['worst']})")
+        elif entry.get("text") and entry.get("worst") and contrast(entry["text"], entry["worst"]) < 4.5:
             problems.append(f"{kind} slides: text {entry['text']} on the hardest part of the background ({entry['worst']}) is "
                             f"{contrast(entry['text'], entry['worst']):.1f}:1 (4.5:1 wanted)")
         if not entry.get("calm"):
@@ -1311,7 +1425,9 @@ def check_theme(path: Path) -> tuple[list[str], list[str]]:
     for role in ("display", "body", "mono"):
         stack = [x.strip().strip("\"'") for x in base.get(f"--font-{role}", defaults[f"--font-{role}"]).split(",")]
         first = stack[0]
-        if first.lower() not in have and first.lower() not in generic and first.lower() not in BUNDLED:
+        backed = len(stack) > 1 and (stack[1].lower() in have or stack[1].lower() in BUNDLED) and stack[1].lower() != first.lower() \
+            and any(stack[1].lower() == c.lower() for c in STAND_INS.get(first.lower(), [stack[1]]))
+        if first.lower() not in have and first.lower() not in generic and first.lower() not in BUNDLED and not backed:
             notes.append(f"--font-{role} starts with \"{first}\", which is not embedded: it shows only where installed")
     return problems, notes
 
@@ -1402,10 +1518,80 @@ def background_sheet(out: Path, target: Path) -> bool:
     return True
 
 
-def preview(out: Path, name: str) -> None:
+COMPARE_DECK = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Compare</title></head><body><main class="deck">
+<section class="slide" data-layout="bullets" id="content"><h2 class="slide-title">{title}</h2>
+<div class="slide-body"><ul><li>{first}<ul><li>{detail}</li></ul></li><li>{second}</li></ul></div><aside class="notes"><p>Sample.</p></aside></section>
+<section class="slide" data-layout="title" id="title"><h1 class="slide-title">{title}</h1><p class="slide-subtitle">{sub}</p>
+<aside class="notes"><p>Sample.</p></aside></section>
+<section class="slide" data-layout="section" id="section"><h2 class="slide-title">{title}</h2><p class="slide-subtitle">{sub}</p>
+<aside class="notes"><p>Sample.</p></aside></section>
+</main></body></html>
+"""
+
+
+def compare_sheet(out: Path, template: Path, layouts: dict, folder: Path) -> Path | None:
+    """The template's own slides beside this theme's, with the same words on both.
+
+    LibreOffice draws one slide per kind with sample text in the template's
+    placeholders; the same text is built in the theme. Where the two differ
+    (where the title sits, a color, an alignment, a line that should not be
+    there), the import got something wrong.
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        return None
+    kinds = [k for k in ("content", "title", "section") if k in layouts]
+    drawn, _ = _backgrounds.render(template, {k: layouts[k] for k in kinds}, folder / "template", filled=True, size=(1920, 1080))
+    if not drawn:
+        return None
+    sample = _backgrounds.SAMPLE
+    src = folder / "compare.src.html"
+    src.write_text(COMPARE_DECK.format(title=sample["title"], sub=sample["sub"], first=sample["body"][0], detail=sample["body"][1][0],
+                                       second=sample["body"][2]), encoding="utf-8")
+    scripts = Path(__file__).resolve().parent
+    subprocess.run([sys.executable, str(scripts / "build.py"), str(src), "--theme", str(out), "-o", str(folder / "compare.html"), "--quiet"],
+                   capture_output=True, text=True)
+    subprocess.run([sys.executable, str(scripts / "render.py"), str(folder / "compare.html"), "--out", str(folder / "compare"), "--no-contrast"],
+                   capture_output=True, text=True)
+    order = {"content": 1, "title": 2, "section": 3}
+    rows = [(k, drawn[k], folder / "compare" / f"slide-{order[k]:02d}.png") for k in kinds if k in drawn]
+    rows = [r for r in rows if r[2].is_file()]
+    if not rows:
+        return None
+    tw, th, pad, label = 800, 450, 20, 34
+    sheet = Image.new("RGB", (2 * tw + 3 * pad, len(rows) * (th + label + pad) + pad), (24, 26, 32))
+    draw = ImageDraw.Draw(sheet)
+    try:
+        font = ImageFont.load_default(size=20)
+    except TypeError:
+        font = ImageFont.load_default()
+    for i, (kind, theirs, ours) in enumerate(rows):
+        y = pad + i * (th + label + pad)
+        draw.text((pad, y), f"{kind}: the template (\"{layouts[kind]['name']}\", drawn by LibreOffice)", fill=(230, 232, 240), font=font)
+        draw.text((2 * pad + tw, y), f"{kind}: this theme", fill=(230, 232, 240), font=font)
+        sheet.paste(Image.open(theirs).convert("RGB").resize((tw, th), Image.LANCZOS), (pad, y + label))
+        sheet.paste(Image.open(ours).convert("RGB").resize((tw, th), Image.LANCZOS), (2 * pad + tw, y + label))
+    target = folder / "compare.png"
+    sheet.save(target)
+    return target
+
+
+def preview(out: Path, name: str, template: Path | None = None, layouts: dict | None = None) -> None:
     starter = _deck.SKILL_DIR / "template" / "starter.src.html"
     target = out / "preview" / f"{name}-sample.html"
     target.parent.mkdir(parents=True, exist_ok=True)
+    if template is not None and layouts:
+        sheet = compare_sheet(out, template, layouts, target.parent)
+        if sheet:
+            print(f"  the template beside this theme, same words on both: {sheet}\n"
+                  "    LOOK AT THIS FIRST. Content slides should match closely: where the title sits, what is above and below\n"
+                  "    any rule, colors, bullets. Title and section slides keep this skill's larger type, so compare their\n"
+                  "    colors and alignment, not sizes. A real difference means the import misread the template: fix the import\n"
+                  "    (--layout, --master, --title-align ...) and run it again, rather than patching the theme or slides by hand.")
+        else:
+            print("  (LibreOffice is needed to draw the template beside the theme; compare them by eye instead)")
     if background_sheet(out, target.parent / "backgrounds.png"):
         print(f"  backgrounds with their text areas: {target.parent / 'backgrounds.png'}  (compare with the template)")
     scripts = Path(__file__).resolve().parent
@@ -1441,6 +1627,10 @@ def main() -> None:
         p.add_argument("--label", help="display name")
         p.add_argument("--fonts", help="folder of font files to embed (.ttf, .otf, .woff, .woff2)")
         p.add_argument("--font-license", help="license note for the embedded fonts")
+        p.add_argument("--font-alias", action="append", metavar="NAME=FAMILY",
+                       help="show the embedded font FAMILY wherever the font NAME is not installed, for example "
+                            "Arial=\"Liberation Sans\" (repeatable; the usual stand-ins for Arial, Times New Roman, Calibri, Cambria "
+                            "and Courier New are found on their own when their files are in --fonts)")
         p.add_argument("--logo", help="logo file (.svg or .png)")
         p.add_argument("--logo-dark", help="logo file for dark slides")
         p.add_argument("--shape", choices=sorted(SHAPES), help="corner style (default soft)")
@@ -1468,6 +1658,9 @@ def main() -> None:
                          "same); never gives a flat theme with a dark variant and the logo in the footer")
     p1.add_argument("--no-extra-backgrounds", action="store_true",
                     help="keep backgrounds for content, title, section and closing slides only, not for the template's other layouts")
+    p1.add_argument("--layout", action="append", metavar="KIND=NAME",
+                    help="which layout stands for a kind of slide (content, title, section, closing) when the template does not "
+                         "make it plain: the layout's name or its number, for example --layout content=\"Title and Content\" (repeatable)")
     p1.add_argument("--master", metavar="NUMBER_OR_NAME",
                     help="which slide master to use when the file has several (default: the one most slides use)")
     common(p1)
@@ -1523,8 +1716,14 @@ def main() -> None:
             _deck.die(f"{src} does not exist")
         name = args.name or re.sub(r"[^a-z0-9]+", "-", src.stem.lower()).strip("-")
         args.name = name
+        picks = {}
+        for item in args.layout or []:
+            kind, _, wanted = item.partition("=")
+            if kind.strip() not in _backgrounds.KINDS or not wanted.strip():
+                _deck.die(f"--layout takes KIND=NAME with KIND one of {', '.join(_backgrounds.KINDS)} (got '{item}')")
+            picks[kind.strip()] = wanted.strip().strip("\"'")
         spec, notes = read_pptx(src, Path(tempfile.mkdtemp(prefix="dynamic-decks-")), args.backgrounds, args.master,
-                                not args.no_extra_backgrounds)
+                                not args.no_extra_backgrounds, picks)
     elif args.cmd == "from-spec":
         spec = _deck.read_json(Path(args.spec))
         if not isinstance(spec, dict):
@@ -1541,7 +1740,7 @@ def main() -> None:
     out = write_theme(spec, args, notes)
     problems = report(out, notes)
     if args.preview:
-        preview(out, out.name)
+        preview(out, out.name, Path(args.template).expanduser() if args.cmd == "from-pptx" else None, spec.get("_layouts"))
     if args.set_default:
         p = _deck.save_user_settings({"theme": out.name})
         print(f"  '{out.name}' is now the theme for new decks ({p})")
