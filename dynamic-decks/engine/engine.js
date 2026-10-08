@@ -314,6 +314,9 @@
   var cur = -1, step = 0;          // logical position
   var shown = -1;                  // slide currently on the stage
   var blanked = false;
+  // The progress bar is off unless the deck asks for it with
+  // data-progress="on"; L shows or hides it while presenting.
+  var progressOn = deckEl.getAttribute('data-progress') === 'on';
   var peer = null;                 // the other window (presenter <-> audience)
   var editOn = false;              // edit mode: pick an element to reference
 
@@ -454,7 +457,7 @@
   }
   function sendState() {
     if (isEmbed) return;
-    post(peer, { t: 'state', i: cur, s: step, blank: blanked, variant: root.dataset.variant || '' });
+    post(peer, { t: 'state', i: cur, s: step, blank: blanked, progress: progressOn, variant: root.dataset.variant || '' });
   }
   function setVariant(v, remote) {
     if (!v || v === root.dataset.variant) return;
@@ -473,6 +476,15 @@
     if (isMain) root.classList.toggle('deck-blanked', blanked);
     if (isPresenter && pv) pv.status.textContent = blanked ? 'Audience screen is blank' : linkText();
     if (!remote) sendState();
+  }
+  function setProgress(on, remote) {
+    progressOn = !!on;
+    deckEl.classList.toggle('is-progress-on', progressOn);
+    if (!remote) {
+      // The audience sees the bar itself; the presenter window does not.
+      if (isPresenter) toast(progressOn ? 'Progress bar shown on the audience screen' : 'Progress bar hidden');
+      sendState();
+    }
   }
 
   var lastPong = 0, gotState = false;
@@ -499,6 +511,7 @@
       if (isPresenter) { lastPong = Date.now(); gotState = true; updateLink(); }
       if (d.variant) setVariant(d.variant, true);
       if (typeof d.blank === 'boolean' && d.blank !== blanked) setBlank(d.blank, true);
+      if (typeof d.progress === 'boolean' && d.progress !== progressOn) setProgress(d.progress, true);
       go(d.i, d.s, { remote: true });
     }
   });
@@ -577,6 +590,7 @@
       '<dt><kbd>O</kbd></dt><dd>Overview of all slides</dd>' +
       '<dt><kbd>B</kbd></dt><dd>Blank the screen</dd>' +
       '<dt><kbd>T</kbd></dt><dd>Switch light and dark</dd>' +
+      '<dt><kbd>L</kbd></dt><dd>Show or hide the progress bar</dd>' +
       '<dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>First and last slide</dd>' +
       '<dt><kbd>12</kbd> <kbd>Enter</kbd></dt><dd>Jump to a slide number</dd>' +
       '<dt><kbd>P</kbd></dt><dd>Print or save as PDF&nbsp;<span class="deck-help-star">*</span></dd>' +
@@ -591,6 +605,7 @@
       '<dt><kbd>12</kbd> <kbd>Enter</kbd></dt><dd>Jump to a slide number</dd>' +
       '<dt><kbd>B</kbd></dt><dd>Blank the audience screen</dd>' +
       '<dt><kbd>T</kbd></dt><dd>Switch light and dark</dd>' +
+      '<dt><kbd>L</kbd></dt><dd>Show or hide the audience progress bar</dd>' +
       '<dt><kbd>F</kbd></dt><dd>Full screen for this window</dd>' +
       '<dt><kbd>?</kbd> <kbd>H</kbd></dt><dd>Show or hide this panel</dd>';
     help.innerHTML =
@@ -898,6 +913,7 @@
       case 'f': case 'F': toggleFullscreen(); break;
       case 'b': case 'B': case '.': setBlank(!blanked); break;
       case 't': case 'T': cycleVariant(); break;
+      case 'l': case 'L': setProgress(!progressOn); break;
       case 's': case 'S': if (isMain) openPresenter(); else done = false; break;
       case 'n': case 'N':
         if (isMain) { root.classList.toggle('deck-show-notes'); updateNotesOverlay(); } else done = false;
@@ -1312,6 +1328,7 @@
   chrome.appendChild(el('div', 'deck-progress-bar'));
   chrome.setAttribute('aria-hidden', 'true');
   deckEl.appendChild(chrome);
+  deckEl.classList.toggle('is-progress-on', progressOn);
 
   fit();
   if (isPresenter) {

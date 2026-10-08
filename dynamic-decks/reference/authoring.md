@@ -62,6 +62,7 @@ in px against that stage (2px is 1pt on a standard 13.33in slide).
 ```
 
 - One `<section class="slide">` per slide, directly inside `<main class="deck">`, in order.
+- The progress bar along the bottom is off by default; the presenter shows or hides it with `L`. `<main class="deck" data-progress="on">` starts a deck with it shown. Do not turn it on unless the user asks.
 - `data-layout` is optional. Without it the slide has the frame (margins, title
   position, footer) and an empty body to compose freely.
 - `aside.notes` is required on every slide (the check fails without it). It may
@@ -77,7 +78,7 @@ in px against that stage (2px is 1pt on a standard 13.33in slide).
 | `data-bg="<name>"` | A background the theme took from one of the template's other layouts, such as `quote` or `dark-content`. The names are in the theme's `theme.json` under `backgrounds`; the build reports one the theme does not have. |
 | `data-align="center"` or `"bottom"` | Vertical position of the body content. |
 | `data-footer="off"` | Hides the footer and slide number. `on` shows it where a layout hides it. |
-| `data-progress="off"` | Hides the progress bar while this slide is shown. |
+| `data-progress="off"` | Hides the progress bar while this slide is shown, when the presenter has turned it on. |
 | `data-steps="3"` | Declares steps that have no element of their own (for custom slides). |
 | `data-notes="none"` | Exempts one slide from the notes check. Use rarely. |
 | `id="pricing"` | Lets `deck.html#pricing` link straight to the slide. Must be unique. |
