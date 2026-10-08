@@ -15,7 +15,7 @@ import re
 import xml.etree.ElementTree as ET
 import zipfile
 
-from _backgrounds import NS, rels_of
+from _backgrounds import NS, rels_of, text_shapes
 
 
 # --------------------------------------------------------------------------
@@ -141,26 +141,59 @@ def _first(*values):
 ALIGN = {"l": "start", "just": "start", "dist": "start", "ctr": "center", "r": "end"}
 
 
+def _title_levels(master, layout) -> list:
+    """The first-level paragraph settings a layout's title inherits, nearest first.
+
+    A title placeholder takes them from itself, the master's title box, then
+    the master's title style. A title that is really a text placeholder (see
+    text_shapes) takes them from itself, the master's text box and the
+    master's body style, as PowerPoint does.
+    """
+    own = text_shapes(layout)[0] if layout is not None else None
+    ph = own.find("p:nvSpPr/p:nvPr/p:ph", NS) if own is not None else None
+    as_text = ph is not None and ph.get("type") not in TITLE_TYPES
+    parents = placeholders(master, ("body",) if as_text else TITLE_TYPES)[:1]
+    levels = [lvl for lvl in (_level(sp) for sp in ([own] if own is not None else []) + parents) if lvl is not None]
+    style = master.find(f"p:txStyles/p:{'bodyStyle' if as_text else 'titleStyle'}/a:lvl1pPr", NS) if master is not None else None
+    if style is not None:
+        levels.append(style)
+    return levels
+
+
 def title_align(master, layout=None) -> str:
     """start, center or end: how this kind of slide aligns its title.
 
-    The layout's title box decides, then the master's title box, then the
-    master's title style. PowerPoint's own default master centers titles.
+    The layout's title box decides, then the master's, then the master's
+    style for it. PowerPoint's own default master centers titles.
     """
-    found = None
-    for root in (layout, master):
-        for sp in placeholders(root, TITLE_TYPES):
-            lvl = _level(sp)
-            para = sp.find("p:txBody/a:p/a:pPr", NS)
-            found = _first(lvl.get("algn") if lvl is not None else None, para.get("algn") if para is not None else None)
-            if found:
-                break
-        if found:
-            break
-    if not found and master is not None:
-        style = master.find("p:txStyles/p:titleStyle/a:lvl1pPr", NS)
-        found = style.get("algn") if style is not None else None
+    own = text_shapes(layout)[0] if layout is not None else None
+    para = own.find("p:txBody/a:p/a:pPr", NS) if own is not None else None
+    found = _first(*[lvl.get("algn") for lvl in _title_levels(master, layout)[:1]], para.get("algn") if para is not None else None,
+                   *[lvl.get("algn") for lvl in _title_levels(master, layout)[1:]])
     return ALIGN.get(found or "l", "start")
+
+
+def title_style(master, layout, px_per_pt: float, resolve) -> dict:
+    """What a layout says about its title's text: `size` (stage px), `bold` and `color`, each None when it does not say.
+
+    `color_is_own` tells a color the layout sets for itself from one it merely
+    inherits from the master: the first is a decision about that kind of slide.
+    """
+    size = bold = color = None
+    own = _level(text_shapes(layout)[0]) if layout is not None and text_shapes(layout)[0] is not None else None
+    color_is_own = False
+    for lvl in _title_levels(master, layout):
+        run = lvl.find("a:defRPr", NS)
+        if run is None:
+            continue
+        if size is None and run.get("sz", "").isdigit():
+            size = round(int(run.get("sz")) / 100 * px_per_pt)
+        if bold is None and run.get("b") in ("0", "1", "true", "false"):
+            bold = run.get("b") in ("1", "true")
+        if color is None and run.find("a:solidFill", NS) is not None:
+            color = resolve(run.find("a:solidFill", NS))
+            color_is_own = color is not None and lvl is own
+    return {"size": size, "bold": bold, "color": color, "color_is_own": color_is_own}
 
 
 def hero_place(master, layout, size: tuple[int, int]) -> str | None:
@@ -169,7 +202,8 @@ def hero_place(master, layout, size: tuple[int, int]) -> str | None:
     Goes by the middle of the layout's title and text boxes together. None
     when the layout places none of them itself.
     """
-    boxes = [b for b in (box_of(sp, size) for sp in placeholders(layout, TITLE_TYPES + BODY_TYPES)) if b]
+    title, texts = text_shapes(layout, size)
+    boxes = [b for b in (box_of(sp, size) for sp in ([title] if title is not None else []) + texts) if b]
     if not boxes:
         return None
     top, bottom = min(b[1] for b in boxes), max(b[1] + b[3] for b in boxes)
@@ -300,7 +334,7 @@ def bullets(master, layout, size: tuple[int, int], resolve) -> list[dict]:
     `indent` (stage px from the bullet to the text) and `note` when the
     template's bullet could not be carried as it is.
     """
-    bodies = placeholders(layout, BODY_TYPES)[:1] + placeholders(master, ("body",))[:1]
+    bodies = (text_shapes(layout)[1][:1] if layout is not None else []) + placeholders(master, ("body",))[:1]
     out = []
     for level in (1, 2):
         sources = [lvl for lvl in (_level(sp, level) for sp in bodies) if lvl is not None]
@@ -357,7 +391,7 @@ def body_text(master, layout) -> dict:
     Either is None when the template does not say. The content layout's text
     box decides, then the master's, then the master's body style.
     """
-    bodies = placeholders(layout, BODY_TYPES)[:1] + placeholders(master, ("body",))[:1]
+    bodies = (text_shapes(layout)[1][:1] if layout is not None else []) + placeholders(master, ("body",))[:1]
     sources = [lvl for lvl in (_level(sp) for sp in bodies) if lvl is not None]
     style = master.find("p:txStyles/p:bodyStyle/a:lvl1pPr", NS) if master is not None else None
     if style is not None:

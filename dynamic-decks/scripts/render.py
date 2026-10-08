@@ -118,6 +118,7 @@ TEXT_PROBE = r"""
   };
   const out = [];
   const keys = new Map();
+  let floor = null;                           // the least contrast this slide's theme accepts (see --contrast-floor)
   const walker = document.createTreeWalker(slide, NodeFilter.SHOW_ELEMENT);
   let node;
   while ((node = walker.nextNode())) {
@@ -141,8 +142,10 @@ TEXT_PROBE = r"""
     if (!rects.length) continue;
     const owner = node.closest('[data-type]') || node;   // typed text is one span per letter: report the phrase
     if (!keys.has(owner)) keys.set(owner, keys.size);
+    if (floor === null) floor = parseFloat(getComputedStyle(slide).getPropertyValue('--contrast-floor')) || 3;
     out.push({ key: keys.get(owner), text: owner.textContent.replace(/\s+/g, ' ').trim().slice(0, 48),
-               color: [color[0], color[1], color[2]], alpha: Math.min(1, alpha), size: Math.round(parseFloat(cs.fontSize)), rects });
+               color: [color[0], color[1], color[2]], alpha: Math.min(1, alpha), size: Math.round(parseFloat(cs.fontSize)), rects,
+               floor: Math.min(3, floor) });
   }
   return out;
 }
@@ -214,7 +217,7 @@ def text_contrast(items: list[dict], behind, scale: float) -> list[dict]:
                 k += 1
             marks.append(lums[k][0])
         busy = (marks[1] + 0.05) / (marks[0] + 0.05)
-        limit = BUSY_CONTRAST if busy > BUSY else LOW_CONTRAST
+        limit = BUSY_CONTRAST if busy > BUSY else min(LOW_CONTRAST, float(item.get("floor") or LOW_CONTRAST))
         if value < limit and (item["key"] not in worst or value < worst[item["key"]]["contrast"]):
             worst[item["key"]] = {"text": item["text"], "contrast": round(value, 2), "size": item["size"],
                                   "busy_behind": busy > BUSY}

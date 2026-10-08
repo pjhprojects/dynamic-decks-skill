@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DynamicDecks</title>
-<meta name="generator" content="DynamicDecks 1.3.0">
+<meta name="generator" content="DynamicDecks 1.4.0">
 <meta name="deck:footer" content="DynamicDecks">
 <meta name="deck:theme" content="default">
 <meta name="deck:variant" content="light">
 <meta name="deck:icons" content="lucide">
 <link rel="icon" href="data:,">
-<!-- Built with DynamicDecks 1.3.0. Engine and layouts: MIT License, Copyright (c) 2026 The DynamicDecks authors. The slides are the work of the deck's author. -->
+<!-- Built with DynamicDecks 1.4.0. Engine and layouts: MIT License, Copyright (c) 2026 The DynamicDecks authors. The slides are the work of the deck's author. -->
 <!-- Icons: Lucide (lucide.dev), ISC License, Copyright (c) Lucide Icons and Contributors -->
 <!-- Fonts: Bricolage Grotesque, Hanken Grotesk, JetBrains Mono. SIL Open Font License 1.1 (see fonts/OFL.txt). Free to embed and share. -->
 <!-- deck:engine-css --><style id="deck-engine-css">
@@ -553,6 +553,8 @@ html.deck-presenter .deck { display: none !important; }
   --section-number-gap: auto;      
   --title-gap: 52px;
   --column-gap: var(--space-7);    
+  --card-rule: var(--stroke-base) solid var(--color-text);   
+  --contrast-floor: 3;             
   --title-size: 72px;
   --title-weight: 650;
   --title-color: var(--color-text);
@@ -996,7 +998,7 @@ html:not([data-logo]) .slide-footer-logo { display: none; }
   flex-direction: column;
   gap: var(--space-3);
   padding-top: var(--space-4);
-  border-top: var(--stroke-base) solid var(--color-text);
+  border-top: var(--card-rule, var(--stroke-base) solid var(--color-text));
   min-width: 0;
 }
 .card > .icon { margin-bottom: var(--space-2); color: var(--color-accent); }

@@ -91,7 +91,7 @@ That last one is edit mode: press `E`, click the thing you mean, paste the refer
 
 - **Everything is a token.** Colors, fonts, sizes, spacing, radii, shadows and motion speeds are named values. Slides use the names, never raw values, so a theme swap restyles the whole deck, including the custom slides, the charts and the canvas.
 - **Light and dark** variants in the built-in theme; press `T` to switch while presenting.
-- **Theme from a PowerPoint template.** Give your agent a `.pptx` or `.potx` and it reads the slide master into a theme: colors, fonts and logo, title alignment, where the footer and slide number sit, the bullet style, and which master to use when the file has several.
+- **Theme from a PowerPoint template.** Give your agent a `.pptx` or `.potx` and it reads the slide master into a theme: colors, fonts and logo, title alignment, where the footer and slide number sit, the bullet style, and which master to use when the file has several. It then draws the template's own slides beside the theme's so the two can be compared before any deck is written.
 - **The template's other layouts, by name.** A quote slide, a dark content slide or a divider in the template becomes a background any slide can ask for.
 - **Branded backgrounds stay intact.** When a template's background is a photo, a gradient or artwork, down to a logo or a thin rule, it is kept as a picture for each kind of slide (content, title, section, closing) instead of being rebuilt by guesswork. Pictures are drawn at twice the stage size and line artwork is stored without loss, so rules and lettering stay sharp.
 - **Text goes where the template puts it.** The template's own title box and text box decide where a deck's title and body sit, so a title stays above the rule drawn under it or on the band drawn behind it, in a color that reads there. The picture is measured once for text color and for whether it needs a panel; slides written later follow those rules without anyone looking at it again.
@@ -224,7 +224,7 @@ Ideas, bug reports and pull requests are welcome, and so are new showcase slides
 - In the preview pane of an AI assistant, the presenter window (`S`) and PDF export (`P`) do not work. Download the file and open it in your browser; the deck says so if you press those keys in a preview.
 - Decks are tested in Chromium only (Chrome and Edge share that engine). Firefox and Safari are untested.
 - Decks are for desktop browsers. Phones are out of scope.
-- Reading PowerPoint templates (backgrounds, title alignment, footers, bullets, extra layouts) has been tested on templates made for the tests, not yet on a wide range of real company templates. A theme on a picture background has one look, with no automatic dark variant.
+- Reading PowerPoint templates (backgrounds, title alignment, footers, bullets, extra layouts) is tested on templates made for the tests, some built to reproduce faults reported from a real company template. It has not been run on a wide range of real ones. A theme on a picture background has one look, with no automatic dark variant.
 - A theme restyles the fifteen layouts here; it does not recreate PowerPoint's own layouts box for box. The logo goes in the footer unless it is part of a background picture.
 - Recipients cannot edit a slide by clicking into it.
 - What a slider or other control is set to stays in that window; it is not mirrored to the presenter window.
