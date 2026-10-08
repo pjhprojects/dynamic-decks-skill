@@ -276,7 +276,8 @@ def sample_slide(layout_xml: bytes, points: bool = True) -> str:
             paras = [(SAMPLE["sub"], 0)]
         else:
             paras = [(item, 0) if isinstance(item, str) else item for item in SAMPLE["body"]]
-        body = "".join(f'<a:p>{f"<a:pPr lvl=\"{lvl}\"/>" if lvl else ""}<a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p>' for text, lvl in paras)
+        body = "".join("<a:p>" + (f'<a:pPr lvl="{lvl}"/>' if lvl else "") + f'<a:r><a:rPr lang="en-US"/><a:t>{text}</a:t></a:r></a:p>'
+                       for text, lvl in paras)
         shapes.append(f'<p:sp><p:nvSpPr><p:cNvPr id="{n}" name="Sample {n}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>'
                       f'<p:nvPr><p:ph{attrs}/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{body}</p:txBody></p:sp>')
         n += 1
