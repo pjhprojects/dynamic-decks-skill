@@ -73,6 +73,8 @@ draws under them (`none` when it draws nothing). A custom slide that places
 its own heading in such a theme should keep it within `--title-max`.
 
 `--column-gap` is the space between the two columns of the two-column layout.
+`--card-rule` is the line across the top of a card (`none` removes it; a theme
+does that when its template already draws a rule under the title).
 
 `--frame-left` and `--frame-right` are the side margins on their own. They
 equal `--frame-x` unless the theme's background has artwork down one side, so
@@ -85,6 +87,13 @@ The footer line: `--footer-offset` is its distance from the bottom edge,
 `--footer-size` and `--footer-color` its text, and `--footer-label` and
 `--footer-number` are `block` or `none` to show or hide the deck's label and
 the slide number.
+
+## Checks
+
+`--contrast-floor` is the least contrast `render.py` accepts between text and
+what is behind it: 3 by default. A theme lowers it, on title or section slides
+only, where its template pairs two colors closer than that. Do not lower it to
+silence a warning on a slide of your own.
 
 ## Bullets
 

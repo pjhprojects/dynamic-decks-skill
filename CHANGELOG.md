@@ -4,6 +4,57 @@ All notable changes to DynamicDecks are listed here. Versions follow
 [semantic versioning](https://semver.org): the number in
 `dynamic-decks/scripts/_deck.py` and the release tag are kept the same.
 
+## 1.4.0 (2026-10-07)
+
+Fixes from the first real company template to go through the import. Its
+content layout was not recognized, so nothing was read for content slides, and
+the workarounds that followed caused the rest. Each was reproduced on a
+template generated to have the same construction (`template-custom.pptx`).
+
+- **Layouts with no type are recognized.** Company templates are often built
+  from custom layouts that do not say what they are. The content, title and
+  section layouts are now also found by name, and the content layout, failing
+  that, by what is on it and how many slides use it. `--layout KIND=NAME`
+  settles it by hand, and the report says how each layout was matched. When no
+  content layout is found the report says IMPORT INCOMPLETE and lists the
+  layouts, instead of a quiet note.
+- **A title box that is not a title placeholder is read as the title.** A text
+  placeholder named "Title", or a short box above all the others, gives the
+  title its position, size, weight and color, and is no longer mistaken for
+  the body (which had turned bullets off and taken the wrong text size).
+- **A picture supplied alongside a template keeps the template's text boxes.**
+  `--background` with `from-pptx` used to discard them and guess the largest
+  empty area, which put titles below a rule. With no template, a rule across
+  the top of a supplied picture is now read as the line under the title.
+- **Rules no longer get a shadow.** LibreOffice draws a theme shadow on a
+  shape even when the shape's own empty effect list switches it off, as
+  PowerPoint honors. The import corrects such shapes before drawing.
+- **Title and section slides keep the template's text color.** White on a
+  brand orange stays white, where the import used to choose black for scoring
+  higher on contrast, and to darken the orange. The report gives the contrast
+  figure, and `--contrast-floor` keeps the render check from reporting the
+  brand's own pairing.
+- **Fixed: a theme could be recorded under the name `--text-lg`.** A loop
+  variable overwrote the theme's name whenever the template's body text was
+  outside 24 to 32pt.
+- **Stand-in fonts.** For Arial, Helvetica, Times New Roman, Courier New,
+  Calibri and Cambria, an embedded open-licensed font with the same letter
+  widths (Liberation Sans, Arimo, Carlito and so on) now stands in on its own
+  and the original is no longer reported as missing. `--font-alias` names any
+  other stand-in.
+- **Cards under a rule.** A theme whose template draws a rule under the title
+  sets `--card-rule: none`, since the line on top of each card read as a
+  second rule.
+- **Compare before writing slides.** `--preview` now writes
+  `preview/compare.png`: the template's own slides, drawn with sample text,
+  beside the same slides in the theme. The skill's instructions say to look at
+  it first and to fix the import, not the theme or the slides, when the two
+  differ.
+
+Not done from the same report: a render check for "title below a rule" and
+one for soft-edged or doubled lines. With the causes fixed they would have
+nothing to catch, and the comparison sheet shows both at a glance.
+
 ## 1.3.0 (2026-10-07)
 
 Two faults reported from a real company template, reproduced on templates

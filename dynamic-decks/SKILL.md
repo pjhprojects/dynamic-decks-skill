@@ -281,6 +281,16 @@ body text, and every layout with a look of its own. Those other layouts become
 backgrounds a slide asks for by name (`data-bg="quote"`); the names are in the
 theme's `theme.json`, so read it before writing slides in an imported theme.
 
+**After importing a template, compare before writing any slide.** With
+`--preview` the import writes `preview/compare.png`: the template's own slides
+beside the same slides in the new theme. Look at it first. If the title sits
+somewhere else, a color is off or a line is doubled, the import misread the
+template, and the fix is to run the import again with a flag (`--layout`,
+`--master`, `--title-align` and the others in the reference), not to patch
+`theme.css`, hand-make background pictures or bend the slides. In particular,
+if the report says IMPORT INCOMPLETE, stop and re-import with
+`--layout content=NAME`: nothing was read for content slides.
+
 Each prints what it could not carry over or had to adjust. Relay that list to
 the user in plain words, show them the sample deck in their theme, and treat
 the first result as a draft to review together. Two things are the user's to

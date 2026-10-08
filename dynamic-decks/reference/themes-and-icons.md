@@ -70,19 +70,37 @@ light, or light from dark) when the background is flat, and prints a list of
 what to review. `--preview` builds the sample deck in the new theme and writes
 contact sheets for each variant.
 
-Then:
+Then, in this order:
 
-1. Read the "What to review" list and relay it to the user in plain words.
-2. Look at the contact sheets. Fix what is off by editing `theme.css` by hand:
-   it is ordinary CSS with every value named.
-3. Run `python scripts/add_theme.py check acme` after editing.
-4. Show the user the sample deck and ask whether it matches their template.
+1. **Look at `preview/compare.png` before anything else.** It shows the
+   template's own content, title and section slides, drawn by LibreOffice with
+   sample text, beside the same slides in the new theme. Content slides should
+   match closely: where the title sits, what is above and below any rule,
+   colors, bullets. Title and section slides keep this skill's larger type, so
+   compare their colors and alignment, not their sizes.
+2. **If they do not match, fix the import and run it again.** Do not patch
+   `theme.css`, make background pictures by hand, or adjust slides to
+   compensate: every deck made in the theme would inherit the workaround. The
+   usual causes and their flags:
+   - the wrong layout was taken for a kind of slide, or none was found
+     ("IMPORT INCOMPLETE" in the report): `--layout content="Title and Content"`
+     (also `title`, `section`, `closing`; a name or a number from the list the
+     report prints);
+   - the wrong slide master: `--master`;
+   - a color, an alignment, the footer: `--title-align`, `--slide-number`,
+     `--footer-label`, `--bullet`.
+3. Read the "What to review" list and relay it to the user in plain words.
+4. Look at the contact sheets. Small things that are a matter of taste may be
+   edited in `theme.css` by hand: it is ordinary CSS with every value named.
+   Run `python scripts/add_theme.py check acme` after editing.
+5. Show the user `compare.png` and the sample deck, and ask whether it matches
+   their template.
 
 What a template cannot give, and what happens instead:
 
 | Gap | What the theme does |
 |---|---|
-| Fonts are named, not included | The name goes first in the font stack, so it shows where installed. Elsewhere the built-in font is used. Pass `--fonts <folder>` to embed real font files. |
+| Fonts are named, not included | The name goes first in the font stack, so it shows where installed. Elsewhere the built-in font is used. Pass `--fonts <folder>` to embed real font files. For Arial, Helvetica, Times New Roman, Courier New, Calibri and Cambria there are open-licensed fonts with the same letter widths (Liberation Sans or Arimo, Liberation Serif or Tinos, Liberation Mono or Cousine, Carlito, Caladea): put their files in the `--fonts` folder and they stand in on their own, with nothing moving. `--font-alias Arial="Some Font"` names any other stand-in. |
 | Font licensing | Embedding puts the font inside every deck that is shared. Only embed fonts whose license allows that; ask the user. Files flagged by their maker as not embeddable are skipped. |
 | Picture, gradient or shape artwork backgrounds | Kept as a picture per kind of slide. Exact with LibreOffice installed; without it, shape artwork is left out and reported. |
 | Tints and shades of theme colors | The plain color is used. |
@@ -98,6 +116,23 @@ result as a draft to review with the user.
 The slide master, and the layouts under it, hold more of a brand than its
 colors. `from-pptx` reads the following once and stores each as a token or a
 rule in the theme, so slides follow it without anyone opening the template again.
+
+**Which layout is which.** The theme needs to know which layout is the ordinary
+content slide, which the title slide and which the section header. A layout's
+type says so when the template has one. Many company templates are built from
+custom layouts that carry no type; those are matched by name ("Title and
+Content", "Section Divider"), and the content layout, failing that, by what is
+on it (a title and one text box) and how many slides use it. The report says
+how each was matched whenever it was not by type. `--layout KIND=NAME` settles
+it by hand. If no content layout can be found the report says IMPORT INCOMPLETE
+and lists the layouts: nothing was read for content slides, so run it again
+with `--layout content=...` rather than working around it.
+
+**A title that is not a title placeholder.** In some templates the box that
+holds the title is an ordinary text placeholder, marked as the title only by
+its name ("Title 1") or its place above the others. It is read as the title
+all the same: its position, size, weight and color become the title's, and it
+is not mistaken for the body.
 
 **Which master.** A file can hold several slide masters: a light and a dark
 version, one per sub-brand, or leftovers that came along when slides were
@@ -146,6 +181,15 @@ and the report says why, which is one of:
 override what the template says, and work on `new` and `from-spec` too. Tell the
 user when a part was hidden: a deck's `deck:footer` label will not appear in a
 theme that hides it.
+
+**Title colors on title and section slides.** These take the text color the
+template's own layout sets, even where another color would score higher on
+contrast: a brand's white on its orange stays white. The report gives the
+contrast figure when it is under 3:1, and the theme sets `--contrast-floor` on
+those slides so the render check does not report the brand's own pairing. Only
+under 2:1, where the text could hardly be read, is the measured color used. A
+color the layout merely inherits from the master, without setting it, is kept
+only when it reads well there (3:1): that is a default, not a decision.
 
 **Bullets.** The bullet at the first two levels of body text is read from the
 content layout, then the master's text box, then the master's body style: its
@@ -322,6 +366,11 @@ on the divider background is what makes a deck look like the template.
 - The build reports a `data-bg` name the theme does not have, with the names
   it does have. That slide gets the ordinary background.
 
+A shape in PowerPoint can ask for a theme effect, usually a shadow, and switch
+it off again with an empty effect list. LibreOffice ignores the switch and
+draws the shadow, which turns a thin rule into a rule with a gray smear under
+it. The import corrects this before drawing, so rules come out clean.
+
 To supply pictures yourself, with a template or without one:
 
 ```bash
@@ -330,9 +379,16 @@ python scripts/add_theme.py new --name acme --accent "#E4002B" \
 ```
 
 `--background KIND=FILE` works on `from-pptx`, `new` and `from-spec` (in a spec:
-`"backgrounds": {"content": "bg.png"}`). A supplied picture has no text boxes
-to go by, so its largest empty part becomes the text area; a picture with no
-empty part gets the usual margins and a panel. Pictures that are not 16:9 are
+`"backgrounds": {"content": "bg.png"}`). Where text goes on a supplied picture:
+
+- **With a template** (`from-pptx`), the template's layout for that kind of
+  slide still decides: its title box and text box are used, and the picture is
+  only measured for color. Supplying a picture is seldom needed there; if the
+  drawn background is wrong, fix the import instead.
+- **Without one**, a thin rule across the upper part of the picture is taken
+  as the line under the title: titles go above it and the body below. Failing
+  that, the picture's largest empty part becomes the text area, and a picture
+  with no empty part gets the usual margins and a panel. Pictures that are not 16:9 are
 cropped to fit. A supplied picture is kept at its own size up to 3840 px wide;
 give one at least 1920 px wide, and 3840 if it has fine lines or lettering.
 
