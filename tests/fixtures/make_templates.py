@@ -36,6 +36,16 @@ Needs python-pptx and Pillow. Every picture is drawn from a fixed seed.
                          sharp, and a title that has to stay above the rule.
   template-band.pptx     a dark band across the top with the title box on it,
                          in white, and the text box on the white below.
+  template-custom.pptx   built the way real company templates often are, after
+                         one that was reported: no layout says what kind it is
+                         (no type), so they can only be told by name and
+                         contents; the content layout's title box is a text
+                         placeholder named "Title", not a title placeholder,
+                         above a full-width rule; the rule has a style that
+                         asks for a shadow and an empty effect list that
+                         cancels it; title and section slides are orange with
+                         white titles (white scores lower on contrast than
+                         black there); the fonts are Arial; body text is 18pt.
 """
 from __future__ import annotations
 
@@ -439,10 +449,80 @@ def band() -> None:
     prs.save(HERE / "template-band.pptx")
 
 
+def add_rule_line(obj, x: float, y: float, w: float, color: str, weight: int = 19050) -> None:
+    """A straight line drawn as PowerPoint draws one: a connector whose style names a theme effect (a shadow)
+    and whose own, empty effect list switches that effect off."""
+    line = fragment(
+        f'<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="{next_id(obj)}" name="Straight Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>'
+        f'<p:spPr><a:xfrm><a:off x="{int(x * W)}" y="{int(y * H)}"/><a:ext cx="{int(w * W)}" cy="0"/></a:xfrm>'
+        f'<a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="{weight}"><a:solidFill><a:srgbClr val="{color}"/></a:solidFill></a:ln>'
+        '<a:effectLst/></p:spPr>'
+        '<p:style><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef>'
+        '<a:effectRef idx="2"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="tx1"/></a:fontRef></p:style>'
+        '</p:cxnSp>')
+    tree(obj).insert(2, line)
+
+
+def title_color(layout, kinds: tuple, color: str) -> None:
+    """Give a layout's title placeholder a text color of its own."""
+    lst = placeholder(layout, kinds[0]).find(f"{{{P}}}txBody/{{{A}}}lstStyle")
+    for old in list(lst):
+        lst.remove(old)
+    lst.append(fragment(f'<a:lvl1pPr><a:defRPr><a:solidFill><a:srgbClr val="{color}"/></a:solidFill></a:defRPr></a:lvl1pPr>'))
+
+
+def custom() -> None:
+    prs, master, layouts = blank()
+    by_name = named(prs)
+    bg_solid(master, "FFFFFF")
+    theme_part = master.part.part_related_by("http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme")
+    xml = theme_part.blob.decode()
+    xml = xml.replace('<a:latin typeface="Calibri"/>', '<a:latin typeface="Arial"/>')
+    xml = xml.replace('<a:accent1><a:srgbClr val="4F81BD"/></a:accent1>', '<a:accent1><a:srgbClr val="F58220"/></a:accent1>')
+    theme_part._blob = xml.encode()
+    paragraph_style(master, "titleStyle", 1).set("algn", "l")
+    paragraph_style(master, "titleStyle", 1).find(f"{{{A}}}defRPr").set("sz", "2800")
+    paragraph_style(master, "bodyStyle", 1).find(f"{{{A}}}defRPr").set("sz", "1800")
+    place(master, ("title",), 0.05, 0.06, 0.9, 0.11)
+    place(master, ("body",), 0.05, 0.23, 0.9, 0.63)
+
+    # content: the title box is a text placeholder that only its name marks as the title; a rule under it
+    content = by_name["Title and Content"]
+    real = placeholder(content, "title")
+    ph = real.find(f"{{{P}}}nvSpPr/{{{P}}}nvPr/{{{P}}}ph")
+    ph.set("type", "body")
+    ph.set("idx", "16")
+    ph.set("sz", "quarter")
+    real.find(f"{{{P}}}nvSpPr/{{{P}}}cNvPr").set("name", "Title 1")
+    sppr = real.find(f"{{{P}}}spPr")
+    sppr.insert(0, fragment(f'<a:xfrm><a:off x="{int(0.05 * W)}" y="{int(0.06 * H)}"/><a:ext cx="{int(0.9 * W)}" cy="{int(0.11 * H)}"/></a:xfrm>'))
+    lst = real.find(f"{{{P}}}txBody/{{{A}}}lstStyle")
+    lst.append(fragment('<a:lvl1pPr marL="0" indent="0"><a:buNone/><a:defRPr sz="2800" b="1"/></a:lvl1pPr>'))
+    real.find(f"{{{P}}}txBody/{{{A}}}bodyPr").set("anchor", "b")
+    place(content, (None,), 0.05, 0.23, 0.9, 0.63)
+    add_rule_line(content, 0.05, 0.19, 0.9, "F58220")
+
+    # title and section slides: orange, with white titles the layout sets itself
+    for name, kinds in (("Title Slide", ("ctrTitle",)), ("Section Header", ("title",))):
+        layout = by_name[name]
+        bg_solid(layout, "F58220")
+        title_color(layout, kinds, "FFFFFF")
+    title_boxes(by_name["Title Slide"], 0.08, 0.3, 0.7)
+
+    for layout in prs.slide_layouts:              # a custom layout carries no type
+        if "type" in layout._element.attrib:
+            del layout._element.attrib["type"]
+    for text in ("First content slide", "Second content slide", "Third content slide"):
+        prs.slides.add_slide(content)
+    prs.slides.add_slide(by_name["Title Slide"])
+    prs.save(HERE / "template-custom.pptx")
+
+
 def main() -> None:
     import sys
     wanted = set(sys.argv[1:])
-    made = {"photo": photo, "shapes": shapes, "busy": busy, "brand": brand, "masters": masters, "rule": rule, "band": band}
+    made = {"photo": photo, "shapes": shapes, "busy": busy, "brand": brand, "masters": masters, "rule": rule, "band": band,
+            "custom": custom}
     unknown = wanted - set(made)
     if unknown:
         sys.exit(f"no such template: {', '.join(sorted(unknown))} (there are: {', '.join(made)})")
