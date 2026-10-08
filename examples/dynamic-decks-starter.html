@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DynamicDecks starter</title>
-<meta name="generator" content="DynamicDecks 1.4.0">
+<meta name="generator" content="DynamicDecks 1.5.0">
 <meta name="deck:footer" content="DynamicDecks starter">
 <meta name="deck:theme" content="default">
 <meta name="deck:variant" content="light">
 <meta name="deck:icons" content="lucide">
 <link rel="icon" href="data:,">
-<!-- Built with DynamicDecks 1.4.0. Engine and layouts: MIT License, Copyright (c) 2026 The DynamicDecks authors. The slides are the work of the deck's author. -->
+<!-- Built with DynamicDecks 1.5.0. Engine and layouts: MIT License, Copyright (c) 2026 The DynamicDecks authors. The slides are the work of the deck's author. -->
 <!-- Icons: Lucide (lucide.dev), ISC License, Copyright (c) Lucide Icons and Contributors -->
 <!-- Fonts: Bricolage Grotesque, Hanken Grotesk. SIL Open Font License 1.1 (see fonts/OFL.txt). Free to embed and share. -->
 <!-- deck:engine-css --><style id="deck-engine-css">
@@ -107,7 +107,7 @@ html.deck-rest [data-steps-focus] > [data-step] { opacity: 1 !important; }
   background: var(--progress-color, var(--color-accent, currentColor));
   transition: transform var(--dur-base, 300ms) var(--ease-out, ease-out);
 }
-.deck[data-progress="off"] .deck-progress,
+.deck:not(.is-progress-on) .deck-progress,
 .deck.is-chrome-hidden .deck-progress,
 html.deck-embed .deck-progress,
 html.deck-rest .deck-progress { display: none; }
@@ -2246,6 +2246,9 @@ svg.diagram { display: block; overflow: visible; font-family: var(--font-body); 
   var cur = -1, step = 0;          // logical position
   var shown = -1;                  // slide currently on the stage
   var blanked = false;
+  // The progress bar is off unless the deck asks for it with
+  // data-progress="on"; L shows or hides it while presenting.
+  var progressOn = deckEl.getAttribute('data-progress') === 'on';
   var peer = null;                 // the other window (presenter <-> audience)
   var editOn = false;              // edit mode: pick an element to reference
 
@@ -2386,7 +2389,7 @@ svg.diagram { display: block; overflow: visible; font-family: var(--font-body); 
   }
   function sendState() {
     if (isEmbed) return;
-    post(peer, { t: 'state', i: cur, s: step, blank: blanked, variant: root.dataset.variant || '' });
+    post(peer, { t: 'state', i: cur, s: step, blank: blanked, progress: progressOn, variant: root.dataset.variant || '' });
   }
   function setVariant(v, remote) {
     if (!v || v === root.dataset.variant) return;
@@ -2405,6 +2408,15 @@ svg.diagram { display: block; overflow: visible; font-family: var(--font-body); 
     if (isMain) root.classList.toggle('deck-blanked', blanked);
     if (isPresenter && pv) pv.status.textContent = blanked ? 'Audience screen is blank' : linkText();
     if (!remote) sendState();
+  }
+  function setProgress(on, remote) {
+    progressOn = !!on;
+    deckEl.classList.toggle('is-progress-on', progressOn);
+    if (!remote) {
+      // The audience sees the bar itself; the presenter window does not.
+      if (isPresenter) toast(progressOn ? 'Progress bar shown on the audience screen' : 'Progress bar hidden');
+      sendState();
+    }
   }
 
   var lastPong = 0, gotState = false;
@@ -2431,6 +2443,7 @@ svg.diagram { display: block; overflow: visible; font-family: var(--font-body); 
       if (isPresenter) { lastPong = Date.now(); gotState = true; updateLink(); }
       if (d.variant) setVariant(d.variant, true);
       if (typeof d.blank === 'boolean' && d.blank !== blanked) setBlank(d.blank, true);
+      if (typeof d.progress === 'boolean' && d.progress !== progressOn) setProgress(d.progress, true);
       go(d.i, d.s, { remote: true });
     }
   });
@@ -2509,6 +2522,7 @@ svg.diagram { display: block; overflow: visible; font-family: var(--font-body); 
       '<dt><kbd>O</kbd></dt><dd>Overview of all slides</dd>' +
       '<dt><kbd>B</kbd></dt><dd>Blank the screen</dd>' +
       '<dt><kbd>T</kbd></dt><dd>Switch light and dark</dd>' +
+      '<dt><kbd>L</kbd></dt><dd>Show or hide the progress bar</dd>' +
       '<dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>First and last slide</dd>' +
       '<dt><kbd>12</kbd> <kbd>Enter</kbd></dt><dd>Jump to a slide number</dd>' +
       '<dt><kbd>P</kbd></dt><dd>Print or save as PDF&nbsp;<span class="deck-help-star">*</span></dd>' +
@@ -2523,6 +2537,7 @@ svg.diagram { display: block; overflow: visible; font-family: var(--font-body); 
       '<dt><kbd>12</kbd> <kbd>Enter</kbd></dt><dd>Jump to a slide number</dd>' +
       '<dt><kbd>B</kbd></dt><dd>Blank the audience screen</dd>' +
       '<dt><kbd>T</kbd></dt><dd>Switch light and dark</dd>' +
+      '<dt><kbd>L</kbd></dt><dd>Show or hide the audience progress bar</dd>' +
       '<dt><kbd>F</kbd></dt><dd>Full screen for this window</dd>' +
       '<dt><kbd>?</kbd> <kbd>H</kbd></dt><dd>Show or hide this panel</dd>';
     help.innerHTML =
@@ -2830,6 +2845,7 @@ svg.diagram { display: block; overflow: visible; font-family: var(--font-body); 
       case 'f': case 'F': toggleFullscreen(); break;
       case 'b': case 'B': case '.': setBlank(!blanked); break;
       case 't': case 'T': cycleVariant(); break;
+      case 'l': case 'L': setProgress(!progressOn); break;
       case 's': case 'S': if (isMain) openPresenter(); else done = false; break;
       case 'n': case 'N':
         if (isMain) { root.classList.toggle('deck-show-notes'); updateNotesOverlay(); } else done = false;
@@ -3244,6 +3260,7 @@ svg.diagram { display: block; overflow: visible; font-family: var(--font-body); 
   chrome.appendChild(el('div', 'deck-progress-bar'));
   chrome.setAttribute('aria-hidden', 'true');
   deckEl.appendChild(chrome);
+  deckEl.classList.toggle('is-progress-on', progressOn);
 
   fit();
   if (isPresenter) {
